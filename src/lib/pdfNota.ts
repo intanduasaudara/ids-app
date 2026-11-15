@@ -282,7 +282,7 @@ function gayaTabel(a5: boolean, sempit: boolean) {
 
 /* --------------------------------------------------------- struk sempit 80/58 */
 
-function strukSempit(doc: Doc, aset: Aset, judul: string, nomor: string, info: string[][], tabel: () => void, o: OpsiNotaPdf) {
+function strukSempit(doc: Doc, aset: Aset, judul: string, nomor: string, info: string[][], tabel: (y: number) => void, o: OpsiNotaPdf) {
   const W = doc.internal.pageSize.getWidth()
   const m = 4
   let y = m
@@ -313,8 +313,7 @@ function strukSempit(doc: Doc, aset: Aset, judul: string, nomor: string, info: s
     doc.text(`: ${v}`, m + 17, y)
     y += 3.8
   }
-  doc.__y = y + 1
-  tabel()
+  tabel(y + 1)
   y = akhirTabel(doc) + 6
   if (o.lunas) { capLunas(doc, W / 2, y + 4, 0.5); y += 13 }
   if (o.tampilTtd) {
@@ -406,7 +405,7 @@ export async function pdfNotaPembayaran(halaman: HalamanPembayaran[], kertas: Ke
     if (sempit) {
       strukSempit(doc, aset, 'NOTA PEMBAYARAN', `Diterbitkan: ${diterbitkan}`,
         [['Nama', hal.nama ?? '(nama belum diisi)'], ['ID', hal.kode], ['Tgl bayar', hal.tanggalBayar]],
-        () => isi(doc.__y, 4), o)
+        (yy) => isi(yy, 4), o)
       return
     }
     hiasanHalaman(doc, aset)
