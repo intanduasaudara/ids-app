@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { DialogSelesaiPengerjaan } from '../pengrajin/SelesaiPengerjaan'
 import { kelompokPengrajin } from '../../lib/nota'
 import { formatBerat } from '../../lib/orderSchema'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Ban, CalendarClock, CheckCheck, MessageCircle, Pencil, Phone, Plus, Printer, RotateCcw, Trash2 } from 'lucide-react'
 import { db } from '../../lib/supabase'
 import type { Barang, OrderRingkas, Riwayat } from '../../lib/types'
@@ -41,6 +41,8 @@ export function DetailOrder() {
   const [selesaiPengrajin, setSelesaiPengrajin] = useState<{ id: string; code: string; name: string | null } | null>(null)
   const [hapusBarang, setHapusBarang] = useState<Barang | null>(null)
   const navigasi = useNavigate()
+  // Dibuka dari riwayat order pengrajin: tombol kembali mengarah ke pengrajin itu.
+  const asal = useLocation().state as { dari?: string; label?: string } | null
 
   const data = useMuat(async () => {
     const [o, b] = await Promise.all([
@@ -89,8 +91,8 @@ export function DetailOrder() {
 
   return (
     <>
-      <Link to="/order" className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-ink-soft hover:text-navy-900">
-        <ArrowLeft className="h-4 w-4" aria-hidden /> Semua order
+      <Link to={asal?.dari ?? '/order'} className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-ink-soft hover:text-navy-900">
+        <ArrowLeft className="h-4 w-4" aria-hidden /> {asal?.dari ? `Kembali ke ${asal.label ?? 'pengrajin'}` : 'Semua order'}
       </Link>
 
       <Kartu className="relative overflow-hidden p-5 sm:p-7">

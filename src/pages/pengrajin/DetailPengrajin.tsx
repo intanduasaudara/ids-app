@@ -229,9 +229,10 @@ export function DetailPengrajin() {
                   </thead>
                   <tbody className="divide-y divide-ice-100">
                     {barang.data.baris.map((b) => (
-                      <tr key={b.id} className={cx('hover:bg-ice-50/60', !b.is_active && 'text-ink-muted')}>
+                      <tr key={b.id} className={cx('cursor-pointer select-none hover:bg-gold-50/60', !b.is_active && 'text-ink-muted')}
+                        onClick={() => navigasi(`/order/${b.order_id}`, { state: { dari: `/pengrajin/${p.id}`, label: p.name ?? p.code } })}>
                         <td className="px-4 py-3 font-semibold text-navy-900">
-                          {b.order_number}<span className="ml-1 text-xs font-normal text-ink-muted">#{b.item_no}</span>
+                          <Link to={`/order/${b.order_id}`} state={{ dari: `/pengrajin/${p.id}`, label: p.name ?? p.code }} className="hover:underline" onClick={(e) => e.stopPropagation()}>{b.order_number}</Link><span className="ml-1 text-xs font-normal text-ink-muted">#{b.item_no}</span>
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">{formatBerat(b.weight_grams)}</td>
                         <td className="px-4 py-3">{b.category_name} <span className="text-xs text-ink-muted">· {b.gender}</span></td>
@@ -253,7 +254,11 @@ export function DetailPengrajin() {
               <ul className="space-y-3 md:hidden">
                 {barang.data.baris.map((b) => (
                   <li key={b.id}>
-                    <Kartu className={cx('p-4', !b.is_active && 'opacity-70')}>
+                    <Link to={`/order/${b.order_id}`} state={{ dari: `/pengrajin/${p.id}`, label: p.name ?? p.code }}
+                      aria-label={`Buka order ${b.order_number}`}
+                      className="group block select-none rounded-2xl [-webkit-touch-callout:none] [-webkit-tap-highlight-color:transparent] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400">
+                    <Kartu className={cx('kartu-pantul relative p-4 pr-9 transition-transform active:scale-[0.98]', !b.is_active && 'opacity-70')}>
+                      <ChevronRight className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gold-600 transition-transform group-hover:translate-x-0.5" aria-hidden />
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold text-navy-900">Order {b.order_number} <span className="text-xs font-normal text-ink-muted">#{b.item_no}</span></p>
@@ -268,6 +273,7 @@ export function DetailPengrajin() {
                       </dl>
                       <p className="mt-2 text-xs text-ink-soft">{b.category_name} · {b.gender}</p>
                     </Kartu>
+                    </Link>
                   </li>
                 ))}
               </ul>
