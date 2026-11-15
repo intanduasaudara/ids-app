@@ -407,6 +407,13 @@ html[data-tema='emas-terbalik'] .kode-ids { color: #FFFFFF; background: #8E6C27;
   padding: 0.55em 0.5em; border: 1px solid #8E6C27;
 }
 .tabel-nota td { padding: 0.45em 0.5em; border: 1px solid #dccdab; vertical-align: middle; overflow-wrap: anywhere; }
+.tabel-nota th { overflow-wrap: anywhere; line-height: 1.2; }
+.tabel-nota td.text-right, .tabel-nota tfoot td { white-space: nowrap; overflow-wrap: normal; }
+@media (max-width: 640px) {
+  .tabel-nota th { padding: 0.5em 0.3em; font-size: 0.88em; }
+  .tabel-nota td, .tabel-nota tfoot td { padding: 0.4em 0.3em; }
+  .tabel-nota tfoot tr.total-nota td { letter-spacing: 0.02em; }
+}
 .tabel-nota tbody tr:nth-child(even) td { background: #faf6ec; }
 .tabel-nota tfoot td { border: 1px solid #dccdab; padding: 0.55em 0.5em; }
 .tabel-nota tfoot tr.total-nota td { background: #1f1a12; color: #e6c98a; font-weight: 700; border-color: #1f1a12; letter-spacing: 0.08em; }

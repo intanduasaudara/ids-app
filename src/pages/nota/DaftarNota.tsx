@@ -14,6 +14,7 @@ interface RingkasNota {
   recipient: string | null
   lines: unknown[]
   total: number
+  is_paid: boolean
 }
 
 export default function DaftarNota() {
@@ -22,7 +23,7 @@ export default function DaftarNota() {
   const [q, setQ] = useState('')
 
   const data = useMuat(async () => {
-    const { data, error } = await db().from('manual_notes').select('id, note_no, note_date, recipient, lines, total')
+    const { data, error } = await db().from('manual_notes').select('id, note_no, note_date, recipient, lines, total, is_paid')
       .is('deleted_at', null).order('note_date', { ascending: false }).order('note_no', { ascending: false }).limit(300)
     if (error) throw error
     return (data ?? []) as RingkasNota[]
@@ -60,7 +61,7 @@ export default function DaftarNota() {
                 <Kartu className="kartu-pantul flex items-start gap-3 p-4">
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gold-50 text-gold-700" aria-hidden><FileText className="h-5 w-5" /></span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-semibold tracking-[0.15em] text-ink-muted">No. {String(n.note_no).padStart(4, '0')}</span>
+                    <span className="block text-xs font-semibold tracking-[0.15em] text-ink-muted">INV-{String(n.note_no).padStart(4, '0')}{n.is_paid && <span className="ml-2 rounded border border-[#c62828] px-1 text-[10px] tracking-[0.15em] text-[#c62828]">LUNAS</span>}</span>
                     <span className="block truncate font-semibold text-navy-900">{n.recipient ?? 'Tanpa nama penerima'}</span>
                     <span className="block text-sm text-ink-soft">{formatTanggalHari(n.note_date)} · {n.lines.length} baris</span>
                   </span>

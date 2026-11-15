@@ -170,7 +170,7 @@ export default function EditorNota() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-[190mm] overflow-hidden rounded-xl2 border border-ice-200 shadow-card print:max-w-none print:overflow-visible print:rounded-none print:border-0 print:shadow-none">
+      <div className={`mx-auto ${kertas === 'A4' ? 'max-w-[210mm]' : 'max-w-[148mm]'} overflow-hidden rounded-xl2 border border-ice-200 shadow-card print:max-w-none print:overflow-visible print:rounded-none print:border-0 print:shadow-none`}>
         <KertasNota
           kertas={kertas}
           judul="INVOICE"
@@ -200,7 +200,7 @@ export default function EditorNota() {
         >
           <table className="tabel-nota">
             <colgroup>
-              <col className="w-[15%]" /><col /><col className="w-[22%]" /><col className="w-[22%]" /><col className="w-[7%] print:hidden" />
+              <col className="w-[14%]" /><col /><col className="w-[25%]" /><col className="w-[27%]" /><col className="w-[6%] print:hidden" />
             </colgroup>
             <thead>
               <tr>

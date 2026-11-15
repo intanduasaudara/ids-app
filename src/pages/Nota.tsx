@@ -98,7 +98,7 @@ function HalamanNota({ g, kertas, zona, harga, ubahHarga, lapor, lunas }: {
     >
       <table className="tabel-nota">
         <colgroup>
-          <col className={sempit ? 'w-[9%]' : 'w-[8%]'} /><col className="w-[22%]" /><col /><col className="w-[30%]" /><col className="w-[7%] print:hidden" />
+          <col className={sempit ? 'w-[9%]' : 'w-[8%]'} /><col className="w-[18%]" /><col /><col className="w-[30%]" /><col className="w-[6%] print:hidden" />
         </colgroup>
         <thead>
           <tr>

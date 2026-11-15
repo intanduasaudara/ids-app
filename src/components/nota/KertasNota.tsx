@@ -76,7 +76,7 @@ export function KertasNota({
               judulPanjang ? 'text-[clamp(1.35rem,6vw,2.6rem)]' : 'text-[clamp(2.2rem,11vw,4.6rem)]')}>{judul}</h1>
             {nomor && <p className="mt-1.5 text-[0.95em] tracking-wide">{nomor}</p>}
           </div>
-          <LogoResmi className="w-[28%] max-w-[13rem] shrink-0" />
+          <LogoResmi className="w-[34%] max-w-[13rem] shrink-0 sm:w-[28%]" />
         </div>
 
         <div className="mt-[clamp(1rem,5vw,2.5rem)]">{penerima}</div>
