@@ -13,8 +13,8 @@ import { Isian, Pemuat, Tombol, cx } from '../../components/ui/ui'
 type Pilihan = Pick<PengrajinRingkas, 'id' | 'code' | 'name'>
 
 /**
- * SELESAI PENGERJAAN: menandai barang yang sedang dikerjakan seorang pengrajin menjadi "Selesai Dikerjakan"
- * sekaligus, tanpa membuka order satu per satu. Riwayatnya tetap tercatat per barang.
+ * SELESAI PENGERJAAN: menandai barang yang sedang dikerjakan seorang pengrajin langsung menjadi "Sudah Diserahkan"
+ * (tanggal selesai dan tanggal serah dicatat bersamaan) sekaligus, tanpa membuka order satu per satu. Riwayatnya tetap tercatat per barang.
  */
 export function DialogSelesaiPengerjaan({ pengrajin, idOrder, tutup, berubah }: {
   pengrajin: Pilihan | null
@@ -53,9 +53,9 @@ export function DialogSelesaiPengerjaan({ pengrajin, idOrder, tutup, berubah }: 
     try {
       // Hari ini: pakai jam sekarang. Tanggal lain: jam 12.00 waktu usaha.
       const waktu = tanggal === hariIni(zona) ? null : lokalKeIso(`${tanggal}T12:00`, zona)
-      const { data, error } = await db().rpc('ubah_status', { p_items: [...pilih], p_status: 'selesai', p_waktu: waktu })
+      const { data, error } = await db().rpc('ubah_status', { p_items: [...pilih], p_status: 'diserahkan', p_waktu: waktu })
       if (error) throw error
-      beri(`${Number(data ?? pilih.size)} barang ${pengrajin.code} ditandai selesai dikerjakan.`)
+      beri(`${Number(data ?? pilih.size)} barang ${pengrajin.code} selesai dan sudah diserahkan.`)
       berubah?.()
       tutup()
     } catch (e) {
@@ -80,7 +80,7 @@ export function DialogSelesaiPengerjaan({ pengrajin, idOrder, tutup, berubah }: 
         <p className="rounded-xl bg-ok-50 p-4 text-sm text-ok-700">Tidak ada barang yang sedang dikerjakan{idOrder ? ' di order ini' : ''}. Semua sudah selesai.</p>
       ) : (
         <div className="space-y-4">
-          <p className="text-sm text-ink-soft">Barang yang dicentang berubah menjadi <strong className="text-navy-900">Selesai Dikerjakan</strong>. Riwayat setiap barang tetap tersimpan.</p>
+          <p className="text-sm text-ink-soft">Barang yang dicentang langsung menjadi <strong className="text-navy-900">Sudah Diserahkan</strong>. Riwayat setiap barang tetap tersimpan.</p>
           <div className="flex items-center justify-between text-sm">
             <span className="font-semibold text-navy-900">{barang.length} barang dalam proses</span>
             <button type="button" className="font-semibold text-navy-800 underline-offset-2 hover:underline"

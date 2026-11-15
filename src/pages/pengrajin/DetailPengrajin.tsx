@@ -118,7 +118,6 @@ export function DetailPengrajin() {
   const statistik = [
     { label: 'Total barang', nilai: p.total_items, warna: 'text-navy-900' },
     { label: 'Dalam proses', nilai: p.qty_dalam_proses, warna: 'text-navy-700' },
-    { label: 'Selesai, belum diserahkan', nilai: p.qty_selesai, warna: 'text-gold-600' },
     { label: 'Sudah diserahkan', nilai: p.qty_diserahkan, warna: 'text-ok-600' },
   ]
 
@@ -182,7 +181,7 @@ export function DetailPengrajin() {
             <Isian aria-label="Cari di riwayat order" placeholder="Cari nomor order, pelanggan, kategori" className="pl-10" value={cari} onChange={(e) => setCari(e.target.value)} />
           </div>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Saring status">
-            {(['semua', 'dalam_proses', 'selesai', 'diserahkan'] as SaringStatus[]).map((s) => (
+            {(['semua', 'dalam_proses', 'diserahkan'] as SaringStatus[]).map((s) => (
               <button
                 key={s}
                 type="button"

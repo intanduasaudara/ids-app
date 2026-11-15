@@ -166,7 +166,7 @@ export function DialogBarang({
 const PENJELASAN: Record<StatusBarang, string> = {
   dalam_proses: 'Barang sedang dikerjakan pengrajin. Tanggal selesai dan tanggal serah dikosongkan.',
   selesai: 'Pengrajin sudah selesai mengerjakan. Tanggal selesai dicatat. Barang BELUM diserahkan ke pembeli.',
-  diserahkan: 'Barang sudah diterima pembeli. Tanggal serah dicatat.',
+  diserahkan: 'Barang sudah selesai dan diterima pembeli. Tanggal selesai dan tanggal serah dicatat.',
 }
 
 /** Mengubah status satu atau beberapa barang, dengan pilihan waktu sekarang atau waktu lain. */
@@ -179,7 +179,7 @@ export function DialogStatus({
   zona: string
 }) {
   const { beri } = useNotifikasi()
-  const [status, setStatus] = useState<StatusBarang>('selesai')
+  const [status, setStatus] = useState<StatusBarang>('diserahkan')
   const [pakaiWaktuLain, setPakaiWaktuLain] = useState(false)
   const [waktu, setWaktu] = useState('')
   const [proses, setProses] = useState(false)
@@ -190,7 +190,7 @@ export function DialogStatus({
     if (!terbuka || !barang) return
     // Usulkan status berikutnya dari status barang pertama.
     const s = barang[0].status
-    setStatus(s === 'dalam_proses' ? 'selesai' : s === 'selesai' ? 'diserahkan' : 'diserahkan')
+    setStatus(s === 'diserahkan' ? 'dalam_proses' : 'diserahkan')
     setPakaiWaktuLain(false)
     setWaktu('')
     setGalat(null)
@@ -243,7 +243,7 @@ export function DialogStatus({
         )}
         <fieldset className="space-y-2">
           <legend className="mb-1 text-sm font-semibold text-navy-900">Ubah menjadi</legend>
-          {(['dalam_proses', 'selesai', 'diserahkan'] as StatusBarang[]).map((s) => (
+          {(['dalam_proses', 'diserahkan'] as StatusBarang[]).map((s) => (
             <label key={s} className={cx('flex cursor-pointer gap-3 rounded-xl border p-3', status === s ? 'border-gold-400 bg-gold-50' : 'border-ice-300 bg-white')}>
               <input type="radio" name="status" className="mt-1 h-4 w-4 accent-navy-900" checked={status === s} onChange={() => setStatus(s)} />
               <span>

@@ -2,7 +2,7 @@
 -- IDS — INTAN DUA SAUDARA  |  SETUP DATABASE LENGKAP (Fase 1)
 -- Cara pakai: Supabase > SQL Editor > New query > tempel SEMUA isi file ini > Run.
 -- Aman dijalankan ulang: tidak menggandakan data dan tidak menghapus data.
--- Isi: gabungan 13 file di folder supabase/migrations (urutan sama).
+-- Isi: gabungan 14 file di folder supabase/migrations (urutan sama).
 -- =====================================================================
 
 
@@ -235,7 +235,6 @@ begin
                    t || '_updated_at', t);
   end loop;
 end $$;
-
 
 -- >>>>>>>>>> 20261110000200_aturan_bisnis.sql
 -- =====================================================================
@@ -522,7 +521,6 @@ drop trigger if exists order_items_before on public.order_items;
 create trigger order_items_before before insert or update on public.order_items
   for each row execute function public.order_items_before();
 
-
 -- >>>>>>>>>> 20261110000300_riwayat_aktivitas.sql
 -- =====================================================================
 -- Migrasi 3: riwayat aktivitas (audit log) otomatis
@@ -732,7 +730,6 @@ drop trigger if exists log_settings on public.app_settings;
 create trigger log_settings after update on public.app_settings
   for each row execute function public.log_settings();
 
-
 -- >>>>>>>>>> 20261110000400_keamanan_rls.sql
 -- =====================================================================
 -- Migrasi 4: keamanan. Hanya akun berperan 'admin' yang bisa membuka data usaha.
@@ -809,7 +806,6 @@ end $$;
 -- riwayat: hanya dibaca admin; ditulis otomatis oleh database.
 drop policy if exists activity_logs_select on public.activity_logs;
 create policy activity_logs_select on public.activity_logs for select to authenticated using ((select public.is_admin()));
-
 
 -- >>>>>>>>>> 20261110000500_fungsi_bisnis.sql
 -- =====================================================================
@@ -1232,7 +1228,6 @@ begin
   limit greatest(1, least(coalesce(p_batas, 50), 200));
 end $$;
 
-
 -- >>>>>>>>>> 20261110000600_data_awal.sql
 -- =====================================================================
 -- Migrasi 6: data awal (aman dijalankan berulang, tidak menggandakan data)
@@ -1267,7 +1262,6 @@ where not exists (
   select 1 from public.craftsmen c
   where public.normalize_code(c.code) = v.code and c.deleted_at is null
 );
-
 
 -- >>>>>>>>>> 20261110000700_realtime_storage.sql
 -- =====================================================================
@@ -1311,7 +1305,6 @@ drop policy if exists ids_foto_delete on storage.objects;
 create policy ids_foto_delete on storage.objects for delete to authenticated
   using (bucket_id in ('foto-barang', 'identitas') and (select public.is_admin()));
 
-
 -- >>>>>>>>>> 20261110000800_hak_akses.sql
 -- =====================================================================
 -- Migrasi 8: hak akses (dijalankan paling akhir)
@@ -1348,7 +1341,6 @@ revoke execute on function public.tulis_log(text, text, uuid, uuid, uuid, uuid, 
 -- Objek yang dibuat nanti tidak otomatis terbuka untuk anon.
 alter default privileges in schema public revoke all on tables from anon;
 alter default privileges in schema public revoke execute on functions from anon, public;
-
 
 -- >>>>>>>>>> 20261110000900_sampah_a5.sql
 -- =====================================================================
@@ -1696,7 +1688,6 @@ grant execute on function public.hapus_order(uuid), public.hapus_barang(uuid), p
   public.masa_sampah(), public.order_items_before_inti(public.order_items, public.order_items, text) to authenticated;
 revoke execute on function public.hapus_order(uuid), public.hapus_barang(uuid), public.pulihkan_sampah(text, uuid) from anon, public;
 
-
 -- >>>>>>>>>> 20261112001000_berat_pengrajin.sql
 -- =====================================================================
 -- Migrasi 10: berat barang dengan minimal yang bisa diatur, order tanpa data pelanggan,
@@ -1942,7 +1933,6 @@ revoke all on public.v_items from anon, public;
 grant select on public.v_items to authenticated;
 grant execute on function public.hapus_pengrajin(uuid), public.pulihkan_sampah(text, uuid) to authenticated;
 revoke execute on function public.hapus_pengrajin(uuid), public.pulihkan_sampah(text, uuid) from anon, public;
-
 
 -- >>>>>>>>>> 20261113001100_perak_nota.sql
 -- =====================================================================
@@ -2297,7 +2287,6 @@ grant execute on function public.laporan_perak(date), public.hapus_pembelian_per
 revoke execute on function public.laporan_perak(date), public.hapus_pembelian_perak(uuid), public.hapus_nota(uuid),
   public.pulihkan_sampah(text, uuid) from anon, public;
 
-
 -- >>>>>>>>>> 20261113001200_stok_barang.sql
 -- =====================================================================
 -- Migrasi 12: stok barang jadi (katalog perhiasan)
@@ -2611,7 +2600,6 @@ from (values
 ) as v(code, name, class, kind, gender, photo, urut)
 where not exists (select 1 from public.products p where p.code = v.code);
 
-
 -- >>>>>>>>>> 20261114001300_harga_tandatangan.sql
 -- =====================================================================
 -- Migrasi 13: label harga stok barang, foto katalog tanpa latar, dan tanda tangan nota
@@ -2654,3 +2642,16 @@ end $$;
 
 -- Gambar tanda tangan untuk nota (disimpan di penyimpanan "identitas", sama seperti logo).
 alter table public.app_settings add column if not exists signature_path text;
+
+-- >>>>>>>>>> 20261115001400_alur_dua_tahap.sql
+-- Alur status disederhanakan menjadi dua tahap: Dalam proses -> Sudah diserahkan.
+-- Tombol SELESAI PENGERJAAN sekarang langsung menandai barang "Sudah diserahkan".
+-- Barang yang masih tertahan di status "Selesai dikerjakan" ikut dipindahkan ke "Sudah diserahkan";
+-- tanggal serahnya disamakan dengan tanggal selesainya. Aman dijalankan ulang (tidak ada yang berubah lagi).
+
+update public.order_items
+set status = 'diserahkan',
+    delivered_at = coalesce(completed_at, now())
+where status = 'selesai'
+  and deleted_at is null
+  and cancelled_at is null;

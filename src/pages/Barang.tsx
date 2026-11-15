@@ -163,8 +163,7 @@ export default function Barang() {
         </select>
         <select aria-label="Status" className={KELAS_PILIH} value={param.get('status') ?? ''} onChange={(e) => ubah('status', e.target.value)}>
           <option value="">Semua status</option>
-          {(Object.keys(LABEL_STATUS) as StatusBarang[]).map((s) => <option key={s} value={s}>{LABEL_STATUS[s]}</option>)}
-          <option value="belum_diserahkan">Belum diserahkan</option>
+          {(['dalam_proses', 'diserahkan'] as StatusBarang[]).map((s) => <option key={s} value={s}>{LABEL_STATUS[s]}</option>)}
         </select>
         <select aria-label="Tahun produksi" className={KELAS_PILIH} value={param.get('tahun') ?? ''} onChange={(e) => ubah('tahun', e.target.value)}>
           <option value="">Semua tahun</option>

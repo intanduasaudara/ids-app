@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowRight, Boxes, CheckCircle2, Clock, Gem, HandHeart, PackageOpen, Plus, ShoppingBag, Users } from 'lucide-react'
+import { ArrowRight, Boxes, Clock, Gem, HandHeart, Plus, ShoppingBag, Users } from 'lucide-react'
 import { db } from '../lib/supabase'
 import { formatAngka, formatTanggal, formatTanggalPanjang, hariIni as tglHariIni } from '../lib/format'
 import { daftarBulan, type Rentang } from '../lib/periode'
@@ -79,9 +79,7 @@ export default function Beranda() {
         { label: 'Total order', nilai: s.total_order, Ikon: ShoppingBag, ke: '/order', nada: 'navy' },
         { label: 'Total barang', nilai: s.total_barang, Ikon: Boxes, ke: '/barang', nada: 'navy' },
         { label: 'Dalam proses', nilai: s.dalam_proses, Ikon: Clock, ke: '/barang?status=dalam_proses', nada: 'ice' },
-        { label: 'Selesai dikerjakan', nilai: s.selesai_dikerjakan, Ikon: CheckCircle2, ke: '/barang?status=selesai', nada: 'emas' },
         { label: 'Sudah diserahkan', nilai: s.sudah_diserahkan, Ikon: HandHeart, ke: '/barang?status=diserahkan', nada: 'hijau' },
-        { label: 'Belum diserahkan', nilai: s.belum_diserahkan, Ikon: PackageOpen, ke: '/barang?status=belum_diserahkan', nada: 'emas' },
         { label: 'Pengrajin aktif', nilai: s.pengrajin_aktif, Ikon: Users, ke: '/pengrajin', nada: 'navy' },
         { label: 'Order bulan ini', nilai: s.order_bulan_ini, Ikon: Gem, ke: '/order', nada: 'emas' },
       ]
