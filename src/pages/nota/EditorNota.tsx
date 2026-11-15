@@ -189,7 +189,7 @@ export default function EditorNota() {
             </label>
           }
           tanggal={<TanggalNota iso={tanggal} teks={formatTanggalHari(tanggal)} label="Ubah tanggal nota"
-            ubah={(v) => { setTanggal(v); setBerubah(true) }} />
+            ubah={(v) => { setTanggal(v); setBerubah(true) }} />}
         >
           <table className="tabel-nota">
             <colgroup>
