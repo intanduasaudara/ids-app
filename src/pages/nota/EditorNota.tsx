@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CalendarDays, Download, Plus, Printer, Save, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Download, Plus, Printer, Save, Trash2, X } from 'lucide-react'
 import { pdfNotaManual } from '../../lib/pdfNota'
 import { db } from '../../lib/supabase'
 import { bacaRupiah, formatRupiah, formatTanggalHari, hariIni, ketikRupiah } from '../../lib/format'
@@ -10,7 +10,7 @@ import { useMuat } from '../../sync/useMuat'
 import { useNotifikasi } from '../../components/ui/Notifikasi'
 import { Konfirmasi } from '../../components/ui/Dialog'
 import { KotakGalat, Pemuat, Tombol } from '../../components/ui/ui'
-import { KertasNota } from '../../components/nota/KertasNota'
+import { KertasNota, TanggalNota } from '../../components/nota/KertasNota'
 import { useIdentitasNota } from '../../components/nota/useIdentitasNota'
 
 // Nota manual: diketik bebas, jumlah = banyaknya x harga, total otomatis.
@@ -174,7 +174,6 @@ export default function EditorNota() {
         <KertasNota
           kertas={kertas}
           judul="INVOICE"
-          nomor={<>NO: INV-{nomor != null ? String(nomor).padStart(4, '0') : 'baru'}</>}
           lunas={lunas}
           ucapan={identitas.ucapanPembeli}
           jabatan={identitas.jabatan}
@@ -186,17 +185,11 @@ export default function EditorNota() {
             <label className="block">
               <span className="block font-display text-[1.6em] font-bold leading-tight text-[#2a2318]">Kepada Yth.</span>
               <input value={kepada} onChange={(e) => { setKepada(e.target.value); setBerubah(true) }} maxLength={120} placeholder="nama pembeli (boleh dikosongkan)"
-                className="isian-nota mt-1 w-full max-w-md border-b border-dotted border-black/40 bg-transparent px-1 font-display text-[1.3em] font-semibold focus:outline-none" />
+                className="isian-nota mt-1 w-full max-w-md border-b border-dotted border-[#8E6C27]/60 bg-transparent px-1 font-display text-[1.45em] font-bold text-[#8E6C27] placeholder:text-[1rem] placeholder:font-normal placeholder:text-[#b9a77f] focus:outline-none" />
             </label>
           }
-          tanggal={
-            <label className="relative inline-flex cursor-pointer items-center gap-1.5">
-              Tanggal: <span className="font-semibold underline decoration-dotted decoration-[#8E6C27] underline-offset-4 print:no-underline">{formatTanggalHari(tanggal)}</span>
-              <CalendarDays className="h-4 w-4 text-[#8E6C27] print:hidden" aria-hidden />
-              <input type="date" value={tanggal} onChange={(e) => { if (e.target.value) { setTanggal(e.target.value); setBerubah(true) } }}
-                aria-label="Ubah tanggal nota" className="absolute inset-0 h-full w-full cursor-pointer opacity-0 print:hidden" />
-            </label>
-          }
+          tanggal={<TanggalNota iso={tanggal} teks={formatTanggalHari(tanggal)} label="Ubah tanggal nota"
+            ubah={(v) => { setTanggal(v); setBerubah(true) }} />
         >
           <table className="tabel-nota">
             <colgroup>

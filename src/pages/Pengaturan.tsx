@@ -56,7 +56,7 @@ const skemaUsaha = z.object({
   receipt_show_signature: z.boolean(),
   receipt_footer: z.string().max(300),
   contact_label: z.string().trim().max(60, 'Maksimal 60 huruf'),
-  signer_title: z.string().trim().min(1, 'Isi jabatan, contoh Manager').max(60, 'Maksimal 60 huruf'),
+  signer_title: z.string().trim().min(1, 'Isi jabatan, contoh Direktur').max(60, 'Maksimal 60 huruf'),
   thanks_buyer: z.string().trim().min(1, 'Ucapan tidak boleh kosong').max(200, 'Maksimal 200 huruf'),
   thanks_craftsman: z.string().trim().min(1, 'Ucapan tidak boleh kosong').max(200, 'Maksimal 200 huruf'),
   wa_template_proses: z.string().trim().min(1, 'Template tidak boleh kosong').max(2000),
@@ -77,7 +77,7 @@ function FormUsaha({ p }: { p: TPengaturan }) {
     silver_lady_grams: String(Number(p.silver_lady_grams ?? 6)).replace('.', ','),
     silver_man_grams: String(Number(p.silver_man_grams ?? 12)).replace('.', ','),
     receipt_show_signature: p.receipt_show_signature, receipt_footer: p.receipt_footer,
-    contact_label: p.contact_label ?? 'Admin IDS', signer_title: p.signer_title ?? 'Manager',
+    contact_label: p.contact_label ?? 'Admin IDS', signer_title: p.signer_title ?? 'Direktur',
     thanks_buyer: p.thanks_buyer ?? 'Terima kasih atas pembelian Anda', thanks_craftsman: p.thanks_craftsman ?? "Kami tukar se'adanya barang-barang buhan pian",
     wa_template_proses: p.wa_template_proses, wa_template_selesai: p.wa_template_selesai, wa_template_diserahkan: p.wa_template_diserahkan,
   })
@@ -161,7 +161,7 @@ function FormUsaha({ p }: { p: TPengaturan }) {
           <Bidang label="Keterangan di samping nomor WA" id="s-label" galat={e.contact_label?.message} bantuan="Contoh: Admin IDS">
             <Isian id="s-label" {...register('contact_label')} />
           </Bidang>
-          <Bidang label="Jabatan di bawah tanda tangan" id="s-jabatan" galat={e.signer_title?.message} bantuan="Contoh: Manager">
+          <Bidang label="Jabatan di bawah tanda tangan" id="s-jabatan" galat={e.signer_title?.message} bantuan="Contoh: Direktur">
             <Isian id="s-jabatan" {...register('signer_title')} />
           </Bidang>
           <Bidang label="Ucapan di INVOICE (pembeli)" id="s-uc-beli" galat={e.thanks_buyer?.message}>

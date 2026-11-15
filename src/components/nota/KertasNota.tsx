@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { MapPin, Phone } from 'lucide-react'
+import { CalendarDays, MapPin, Phone } from 'lucide-react'
 import { LogoResmi } from '../ui/LogoResmi'
 import { TandaIDS } from '../layout/Logo'
 import { cx } from '../ui/ui'
@@ -71,16 +71,21 @@ export function KertasNota({
 
       <div className="relative flex flex-1 flex-col px-[6%] pb-[clamp(2.2rem,7vw,3.5rem)] pt-[clamp(2.8rem,11vw,5.5rem)]">
         <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className={cx('font-display font-bold leading-none tracking-wide text-[#2a2318]',
               judulPanjang ? 'text-[clamp(1.35rem,6vw,2.6rem)]' : 'text-[clamp(2.2rem,11vw,4.6rem)]')}>{judul}</h1>
             {nomor && <p className="mt-1.5 text-[0.95em] tracking-wide">{nomor}</p>}
+            <div className="mt-[clamp(1rem,5vw,2.2rem)]">{penerima}</div>
           </div>
-          <LogoResmi className="w-[34%] max-w-[13rem] shrink-0 sm:w-[28%]" />
+          {/* Logo resmi versi tegak (tanda besar + tulisan), mengisi ruang kanan atas */}
+          <img src={`${import.meta.env.BASE_URL}logo-ids-tegak.png`} alt="CV. Intan Dua Saudara" draggable={false}
+            className="-mt-[2%] w-[30%] max-w-[14rem] shrink-0 object-contain" />
         </div>
 
-        <div className="mt-[clamp(1rem,5vw,2.5rem)]">{penerima}</div>
-        <div className="mt-3 text-right">{tanggal}</div>
+        {/* Tanggal dua baris, sedikit ke tengah */}
+        <div className="mt-4 flex justify-end">
+          <div className="mr-[4%] min-w-[40%] sm:mr-[10%] sm:min-w-[32%]">{tanggal}</div>
+        </div>
 
         <div className="mt-2">{children}</div>
 
@@ -117,5 +122,28 @@ export function KertasNota({
       {/* Pita hitam miring di bawah */}
       <div aria-hidden className="nota-pita-bawah absolute bottom-0 left-0 h-[clamp(0.9rem,3.2vw,1.6rem)] w-[84%]" />
     </div>
+  )
+}
+
+/**
+ * Tanggal nota dua baris:  Hari : Minggu  /  Tgl : 15 November 2026.
+ * Ketuk untuk mengganti tanggal (pemilih tanggal tidak ikut tercetak).
+ */
+export function TanggalNota({ iso, teks, ubah, label = 'Ubah tanggal' }: { iso: string; teks: string; ubah: (v: string) => void; label?: string }) {
+  const [hari, ...sisa] = teks.split(', ')
+  const tgl = sisa.length ? sisa.join(', ') : teks
+  return (
+    <label className="relative block cursor-pointer">
+      <span className="grid grid-cols-[auto_auto_1fr] gap-x-1.5 gap-y-0.5">
+        <span>Hari</span><span>:</span><span className="font-semibold">{sisa.length ? hari : '-'}</span>
+        <span>Tgl</span><span>:</span>
+        <span className="inline-flex items-center gap-1.5 font-semibold">
+          {tgl}
+          <CalendarDays className="h-4 w-4 shrink-0 text-[#8E6C27] print:hidden" aria-hidden />
+        </span>
+      </span>
+      <input type="date" value={iso} onChange={(e) => e.target.value && ubah(e.target.value)} aria-label={label}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0 print:hidden" />
+    </label>
   )
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, CalendarDays, Download, Eye, Printer, X } from 'lucide-react'
+import { ArrowLeft, Download, Eye, Printer, X } from 'lucide-react'
 import { pdfNotaPembayaran } from '../lib/pdfNota'
 import { pesanGalat } from '../lib/errors'
 import { useNotifikasi } from '../components/ui/Notifikasi'
@@ -10,7 +10,7 @@ import { akhirBulan, bacaRupiah, formatRupiah, formatTanggalHari, hariIni as tgl
 import { useMuat } from '../sync/useMuat'
 import { useSinkron } from '../sync/SyncProvider'
 import { KotakGalat, Pemuat, cx } from '../components/ui/ui'
-import { KertasNota } from '../components/nota/KertasNota'
+import { KertasNota, TanggalNota } from '../components/nota/KertasNota'
 import { useIdentitasNota } from '../components/nota/useIdentitasNota'
 import { kelompokPengrajin } from '../lib/nota'
 
@@ -38,7 +38,7 @@ function Baris({ label, isi }: { label: string; isi: ReactNode }) {
   return (
     <div className="flex gap-2">
       <span className="w-[8.5em] shrink-0">{label}</span>
-      <span className="font-semibold">: {isi}</span>
+      <span className="font-semibold text-[#8E6C27]">: {isi}</span>
     </div>
   )
 }
@@ -87,14 +87,7 @@ function HalamanNota({ g, kertas, zona, harga, ubahHarga, lapor, lunas }: {
           </div>
         </div>
       }
-      tanggal={
-        <label className="relative inline-flex cursor-pointer items-center gap-1.5">
-          Tanggal pembayaran: <span className="font-semibold underline decoration-dotted decoration-[#8E6C27] underline-offset-4 print:no-underline">{formatTanggalHari(tglBayar)}</span>
-          <CalendarDays className="h-4 w-4 text-[#8E6C27] print:hidden" aria-hidden />
-          <input type="date" value={tglBayar} onChange={(e) => e.target.value && setTglBayar(e.target.value)} aria-label="Ubah tanggal pembayaran"
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0 print:hidden" />
-        </label>
-      }
+      tanggal={<TanggalNota iso={tglBayar} teks={formatTanggalHari(tglBayar)} ubah={setTglBayar} label="Ubah tanggal pembayaran" />}
     >
       <table className="tabel-nota">
         <colgroup>

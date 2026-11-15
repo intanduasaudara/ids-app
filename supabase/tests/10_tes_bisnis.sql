@@ -870,7 +870,7 @@ begin
   update public.app_settings set signature_path = 'tanda-tangan/ttd-1.png' where id = 1;
   perform tes.sama('tanda tangan tersimpan', (select signature_path from public.app_settings), 'tanda-tangan/ttd-1.png');
   -- T29: nota baru (kontak, jabatan, ucapan, LUNAS)
-  perform tes.sama('jabatan penanda tangan bawaan', (select signer_title from public.app_settings), 'Manager');
+  perform tes.sama('jabatan penanda tangan bawaan', (select signer_title from public.app_settings), 'Direktur');
   perform tes.sama('ucapan pengrajin', (select thanks_craftsman from public.app_settings), 'Kami tukar se''adanya barang-barang buhan pian');
   perform tes.gagal('jabatan terlalu panjang ditolak', 'update public.app_settings set signer_title = repeat(''x'', 61) where id = 1', 'check');
   insert into public.manual_notes (recipient, lines) values ('Uji LUNAS', '[]'::jsonb) returning id into p;

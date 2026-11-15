@@ -26,7 +26,7 @@ export function useIdentitasNota() {
   return {
     ttd,
     kontak,
-    jabatan: pengaturan?.signer_title || 'Manager',
+    jabatan: pengaturan?.signer_title || 'Direktur',
     tampilTtd: pengaturan?.receipt_show_signature ?? true,
     ucapanPembeli: pengaturan?.thanks_buyer || 'Terima kasih atas pembelian Anda',
     ucapanPengrajin: pengaturan?.thanks_craftsman || "Kami tukar se'adanya barang-barang buhan pian",

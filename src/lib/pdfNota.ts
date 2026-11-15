@@ -22,7 +22,7 @@ const MERAH: RGB = [198, 40, 40]
 const ABU: RGB = [90, 76, 51]
 
 /** Memuat gambar (logo, tanda tangan) menjadi data URL beserta ukurannya. */
-async function muatGambar(url: string): Promise<Gambar | null> {
+async function muatGambar(url: string, maks = 1000): Promise<Gambar | null> {
   try {
     const r = await fetch(url)
     if (!r.ok) return null
@@ -39,24 +39,32 @@ async function muatGambar(url: string): Promise<Gambar | null> {
       im.onerror = gagal
       im.src = data
     })
-    return { data, ...ukuran }
+    if (ukuran.w <= maks) return { data, ...ukuran }
+    // Perkecil gambar besar supaya berkas PDF tidak berat.
+    const im = await new Promise<HTMLImageElement>((ok, gagal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = gagal; i.src = data })
+    const c = document.createElement('canvas')
+    c.width = maks
+    c.height = Math.round((ukuran.h * maks) / ukuran.w)
+    c.getContext('2d')?.drawImage(im, 0, 0, c.width, c.height)
+    return { data: c.toDataURL('image/png'), w: c.width, h: c.height }
   } catch {
     return null
   }
 }
 
+const logoTegak = () => muatGambar(`${import.meta.env.BASE_URL}logo-ids-tegak.png`, 600)
 const logoResmi = () => muatGambar(`${import.meta.env.BASE_URL}logo-ids.png`)
 
 /** Tanda logo IDS (tanpa tulisan) sebagai PNG, untuk latar samar. */
 async function tandaLogo(): Promise<Gambar | null> {
   try {
     const [, , vw, vh] = KOTAK_LOGO.split(' ').map(Number)
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${KOTAK_LOGO}" width="${vw * 3}" height="${vh * 3}">${JALUR_LOGO.map((d) => `<path d="${d}" fill="#8E6C27"/>`).join('')}</svg>`
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${KOTAK_LOGO}" width="${vw * 2}" height="${vh * 2}">${JALUR_LOGO.map((d) => `<path d="${d}" fill="#8E6C27"/>`).join('')}</svg>`
     const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
     const im = await new Promise<HTMLImageElement>((ok, gagal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = gagal; i.src = url })
     const c = document.createElement('canvas')
-    c.width = vw * 3
-    c.height = vh * 3
+    c.width = vw * 2
+    c.height = vh * 2
     c.getContext('2d')?.drawImage(im, 0, 0, c.width, c.height)
     return { data: c.toDataURL('image/png'), w: c.width, h: c.height }
   } catch {
@@ -113,12 +121,20 @@ function capLunas(doc: Doc, cx: number, cy: number, skala = 1) {
   }
   doc.setTextColor(...MERAH)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(24 * skala)
-  doc.setCharSpace(2.2 * skala)
-  const lebar = doc.getTextWidth('LUNAS')
-  const [tx, ty] = putar(-lebar / 2, 3 * skala)
-  doc.text('LUNAS', tx, ty, { angle: 12 })
-  doc.setCharSpace(0)
+  const ukuran = 22 * skala
+  doc.setFontSize(ukuran)
+  // Huruf digambar satu per satu dengan jarak tetap supaya tepat di tengah bingkai.
+  const huruf = 'LUNAS'.split('')
+  const jarak = 1.6 * skala
+  const lebarHuruf = huruf.map((h) => doc.getTextWidth(h) as number)
+  const lebar = lebarHuruf.reduce((t, w) => t + w, 0) + jarak * (huruf.length - 1)
+  const tinggiHurufBesar = ukuran * 0.3528 * 0.72
+  let x = -lebar / 2
+  huruf.forEach((h, i) => {
+    const [tx, ty] = putar(x, tinggiHurufBesar / 2)
+    doc.text(h, tx, ty, { angle: 12 })
+    x += lebarHuruf[i] + jarak
+  })
 }
 
 /* ------------------------------------------------------------- kerangka umum */
@@ -134,7 +150,7 @@ export interface OpsiNotaPdf {
   tampilTtd: boolean
 }
 
-interface Aset { logo: Gambar | null; tanda: Gambar | null; ttd: Gambar | null }
+interface Aset { logo: Gambar | null; tegak: Gambar | null; tanda: Gambar | null; ttd: Gambar | null }
 
 /** Hiasan halaman A4/A5: pita emas atas, tanda logo samar, pita hitam bawah. */
 function hiasanHalaman(doc: Doc, aset: Aset) {
@@ -147,34 +163,64 @@ function hiasanHalaman(doc: Doc, aset: Aset) {
     doc.saveGraphicsState()
     doc.setGState(new doc.GState({ opacity: 0.05 }))
     const tw = W * 0.7
-    doc.addImage(aset.tanda.data, 'PNG', -W * 0.12, H * 0.38, tw, (tw * aset.tanda.h) / aset.tanda.w)
+    doc.addImage(aset.tanda.data, 'PNG', -W * 0.12, H * 0.38, tw, (tw * aset.tanda.h) / aset.tanda.w, 'tanda-ids', 'FAST')
     doc.restoreGraphicsState()
   }
   const bawah = W * 0.028
   poligon(doc, [[0, H - bawah], [W * 0.84, H - bawah], [W * 0.84 - bawah * 0.9, H], [0, H]], HITAM)
 }
 
-/** Kepala halaman: judul besar + nomor di kiri, logo di kanan. Mengembalikan y berikutnya. */
-function kepala(doc: Doc, aset: Aset, judul: string, nomor: string): number {
+/**
+ * Kepala halaman: judul besar (+ baris kecil bila ada) di kiri, logo resmi tegak yang besar di kanan.
+ * Mengembalikan y untuk kolom kiri (di bawah judul) dan kolom kanan (di bawah logo).
+ */
+function kepala(doc: Doc, aset: Aset, judul: string, sub: string | null): { kiri: number; kanan: number } {
   const W = doc.internal.pageSize.getWidth()
   const m = W * 0.06
   const a5 = W < 160
+  const k = a5 ? 0.75 : 1
   const y0 = W * 0.06 + (a5 ? 12 : 16)
   const panjang = judul.length > 9
   doc.setTextColor(42, 35, 24)
   doc.setFont('times', 'bold')
   doc.setFontSize((panjang ? 26 : 46) * (a5 ? 0.72 : 1))
-  doc.text(judul, m, y0 + (panjang ? 6 : 10) * (a5 ? 0.75 : 1))
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(a5 ? 8.5 : 10.5)
-  doc.text(nomor, m, y0 + (panjang ? 13 : 18) * (a5 ? 0.75 : 1))
-  if (aset.logo) {
-    const lw = W * 0.28
-    const lh = (lw * aset.logo.h) / aset.logo.w
-    doc.addImage(aset.logo.data, 'PNG', W - m - lw, y0 - 6, lw, lh)
-    return Math.max(y0 + 24 * (a5 ? 0.75 : 1), y0 - 6 + lh) + (a5 ? 6 : 10)
+  const yJudul = y0 + (panjang ? 6 : 10) * k
+  doc.text(judul, m, yJudul)
+  let kiri = yJudul + 4 * k
+  if (sub) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(a5 ? 8.5 : 10.5)
+    doc.text(sub, m, yJudul + 7 * k)
+    kiri = yJudul + 9 * k
   }
-  return y0 + 26
+  let kanan = kiri
+  const logo = aset.tegak ?? aset.logo
+  if (logo) {
+    const lw = W * (aset.tegak ? 0.27 : 0.28)
+    const lh = (lw * logo.h) / logo.w
+    doc.addImage(logo.data, 'PNG', W - m - lw, y0 - 8 * k, lw, lh, undefined, 'FAST')
+    kanan = y0 - 8 * k + lh
+  }
+  return { kiri: kiri + (a5 ? 8 : 11), kanan: kanan + (a5 ? 5 : 7) }
+}
+
+/** Blok tanggal dua baris (Hari / Tgl) yang agak ke tengah. Mengembalikan y di bawahnya. */
+function blokTanggal(doc: Doc, tanggalLengkap: string, y: number): number {
+  const W = doc.internal.pageSize.getWidth()
+  const k = W < 160 ? 0.8 : 1
+  const [hari, ...sisa] = tanggalLengkap.split(', ')
+  const tgl = sisa.join(', ') || tanggalLengkap
+  const x = W * 0.6
+  doc.setFontSize(10.5 * k)
+  doc.setTextColor(...HITAM)
+  for (const [l, v] of [['Hari', sisa.length ? hari : '-'], ['Tgl', tgl]]) {
+    doc.setFont('helvetica', 'normal')
+    doc.text(l, x, y)
+    doc.setFont('helvetica', 'bold')
+    doc.text(`: ${v}`, x + 10 * k, y)
+    y += 5.5 * k
+  }
+  return y
 }
 
 /** Bagian bawah: cap LUNAS, tanda tangan + jabatan, ucapan, kontak. Dimulai dari y (setelah tabel). */
@@ -205,7 +251,7 @@ function kaki(doc: Doc, aset: Aset, o: OpsiNotaPdf, y: number) {
     if (aset.ttd) {
       const s = Math.min((ttdLebar * 0.85) / aset.ttd.w, (20 * k) / aset.ttd.h)
       const w = aset.ttd.w * s, h = aset.ttd.h * s
-      doc.addImage(aset.ttd.data, 'PNG', tengahTtd - w / 2, garisY - h - 1, w, h)
+      doc.addImage(aset.ttd.data, 'PNG', tengahTtd - w / 2, garisY - h - 1, w, h, undefined, 'FAST')
     }
     doc.setDrawColor(...HITAM)
     doc.setLineWidth(0.3)
@@ -289,7 +335,7 @@ function strukSempit(doc: Doc, aset: Aset, judul: string, nomor: string, info: s
   if (aset.logo) {
     const lw = W - 2 * m - 8
     const lh = (lw * aset.logo.h) / aset.logo.w
-    doc.addImage(aset.logo.data, 'PNG', (W - lw) / 2, y, lw, lh)
+    doc.addImage(aset.logo.data, 'PNG', (W - lw) / 2, y, lw, lh, undefined, 'FAST')
     y += lh + 4
   }
   doc.setFont('helvetica', 'bold')
@@ -319,7 +365,7 @@ function strukSempit(doc: Doc, aset: Aset, judul: string, nomor: string, info: s
   if (o.tampilTtd) {
     if (aset.ttd) {
       const s = Math.min(34 / aset.ttd.w, 12 / aset.ttd.h)
-      doc.addImage(aset.ttd.data, 'PNG', W / 2 - (aset.ttd.w * s) / 2, y, aset.ttd.w * s, aset.ttd.h * s)
+      doc.addImage(aset.ttd.data, 'PNG', W / 2 - (aset.ttd.w * s) / 2, y, aset.ttd.w * s, aset.ttd.h * s, undefined, 'FAST')
     }
     y += 13
     doc.setDrawColor(...HITAM)
@@ -352,12 +398,13 @@ function strukSempit(doc: Doc, aset: Aset, judul: string, nomor: string, info: s
 }
 
 async function siapkanAset(o: OpsiNotaPdf, sempit: boolean): Promise<Aset> {
-  const [logo, tanda, ttd] = await Promise.all([
+  const [logo, tegak, tanda, ttd] = await Promise.all([
     logoResmi(),
+    sempit ? Promise.resolve(null) : logoTegak(),
     sempit ? Promise.resolve(null) : tandaLogo(),
-    o.tampilTtd && o.tandaTanganUrl ? muatGambar(o.tandaTanganUrl) : Promise.resolve(null),
+    o.tampilTtd && o.tandaTanganUrl ? muatGambar(o.tandaTanganUrl, 600) : Promise.resolve(null),
   ])
-  return { logo, tanda, ttd }
+  return { logo, tegak, tanda, ttd }
 }
 
 function formatHalaman(kertas: KertasPdf, tinggi: number): [number, number] | string {
@@ -410,7 +457,8 @@ export async function pdfNotaPembayaran(halaman: HalamanPembayaran[], kertas: Ke
     }
     hiasanHalaman(doc, aset)
     const m = W * 0.06
-    let y = kepala(doc, aset, 'NOTA PEMBAYARAN', `Diterbitkan: ${diterbitkan}`)
+    const kp = kepala(doc, aset, 'NOTA PEMBAYARAN', `Diterbitkan: ${diterbitkan}`)
+    let y = kp.kiri
     const k = a5 ? 0.8 : 1
     doc.setTextColor(42, 35, 24)
     doc.setFont('times', 'bold')
@@ -420,16 +468,15 @@ export async function pdfNotaPembayaran(halaman: HalamanPembayaran[], kertas: Ke
     doc.setFontSize(10.5 * k)
     for (const [l, v] of [['Nama pengrajin', hal.nama ?? '(nama belum diisi)'], ['ID pengrajin', hal.kode]]) {
       doc.setFont('helvetica', 'normal')
+      doc.setTextColor(...HITAM)
       doc.text(l, m, y)
       doc.setFont('helvetica', 'bold')
+      doc.setTextColor(...EMAS)
       doc.text(`: ${v}`, m + 32 * k, y)
       y += 5.5 * k
     }
-    doc.setFont('helvetica', 'normal')
-    doc.text('Tanggal pembayaran: ', W - m - doc.getTextWidth(hal.tanggalBayar) - 0.5, y + 2, { align: 'right' })
-    doc.setFont('helvetica', 'bold')
-    doc.text(hal.tanggalBayar, W - m, y + 2, { align: 'right' })
-    isi(y + 5, m)
+    const yTgl = blokTanggal(doc, hal.tanggalBayar, Math.max(kp.kanan, y - 11 * k) + 2)
+    isi(Math.max(y, yTgl) + 3, m)
     kaki(doc, aset, o, akhirTabel(doc))
   })
   await simpanPdf(doc.output('blob'), namaBerkas)
@@ -454,22 +501,20 @@ export async function pdfNotaManual(n: NotaManualPdf, kertas: 'A4' | 'A5', namaB
   const a5 = kertas === 'A5'
   const k = a5 ? 0.8 : 1
   hiasanHalaman(doc, aset)
-  let y = kepala(doc, aset, 'INVOICE', `NO: ${n.nomor}`)
+  const kp = kepala(doc, aset, 'INVOICE', null)
+  let y = kp.kiri
   doc.setTextColor(42, 35, 24)
   doc.setFont('times', 'bold')
   doc.setFontSize(17 * k)
   doc.text('Kepada Yth.', m, y)
   y += 7 * k
-  doc.setFontSize(14 * k)
-  doc.text(n.kepada ?? '....................................', m, y)
-  y += 6 * k
-  doc.setFontSize(10.5 * k)
-  doc.setFont('helvetica', 'normal')
-  doc.text('Tanggal: ', W - m - doc.getTextWidth(n.tanggal) - 0.5, y + 2, { align: 'right' })
-  doc.setFont('helvetica', 'bold')
-  doc.text(n.tanggal, W - m, y + 2, { align: 'right' })
+  doc.setFontSize(15 * k)
+  doc.setTextColor(...EMAS)
+  const namaPenerima = doc.splitTextToSize(n.kepada ?? '....................................', W * 0.5) as string[]
+  namaPenerima.forEach((b) => { doc.text(b, m, y); y += 6 * k })
+  const yTgl = blokTanggal(doc, n.tanggal, Math.max(kp.kanan, y - 12 * k) + 2)
   autoTable(doc, {
-    startY: y + 5,
+    startY: Math.max(y, yTgl) + 3,
     head: [['Banyaknya', 'Nama Barang', 'Harga', 'Jumlah']],
     body: n.baris.length
       ? n.baris.map((b) => [b.banyak ? b.banyak.toLocaleString('id-ID') : '', b.nama, b.harga ? formatRupiah(b.harga) : '', b.jumlah ? formatRupiah(b.jumlah) : ''])

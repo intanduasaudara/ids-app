@@ -2,7 +2,7 @@
 -- IDS — INTAN DUA SAUDARA  |  SETUP DATABASE LENGKAP (Fase 1)
 -- Cara pakai: Supabase > SQL Editor > New query > tempel SEMUA isi file ini > Run.
 -- Aman dijalankan ulang: tidak menggandakan data dan tidak menghapus data.
--- Isi: gabungan 15 file di folder supabase/migrations (urutan sama).
+-- Isi: gabungan 16 file di folder supabase/migrations (urutan sama).
 -- =====================================================================
 
 
@@ -2683,3 +2683,8 @@ where coalesce(business_whatsapp, '') = '';
 
 -- Nota manual: tandai LUNAS (cap merah) atau tidak.
 alter table public.manual_notes add column if not exists is_paid boolean not null default true;
+
+-- >>>>>>>>>> 20261115001600_jabatan_direktur.sql
+-- Jabatan di bawah tanda tangan nota: Direktur (sebelumnya Manager). Aman dijalankan ulang.
+alter table public.app_settings alter column signer_title set default 'Direktur';
+update public.app_settings set signer_title = 'Direktur' where signer_title = 'Manager';
