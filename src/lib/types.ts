@@ -88,6 +88,10 @@ export interface Pengaturan {
   silver_lady_grams: number
   silver_man_grams: number
   signature_path: string | null
+  signer_title: string
+  contact_label: string
+  thanks_buyer: string
+  thanks_craftsman: string
   receipt_show_signature: boolean
   receipt_footer: string
   wa_template_proses: string

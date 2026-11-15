@@ -55,6 +55,10 @@ const skemaUsaha = z.object({
   ),
   receipt_show_signature: z.boolean(),
   receipt_footer: z.string().max(300),
+  contact_label: z.string().trim().max(60, 'Maksimal 60 huruf'),
+  signer_title: z.string().trim().min(1, 'Isi jabatan, contoh Manager').max(60, 'Maksimal 60 huruf'),
+  thanks_buyer: z.string().trim().min(1, 'Ucapan tidak boleh kosong').max(200, 'Maksimal 200 huruf'),
+  thanks_craftsman: z.string().trim().min(1, 'Ucapan tidak boleh kosong').max(200, 'Maksimal 200 huruf'),
   wa_template_proses: z.string().trim().min(1, 'Template tidak boleh kosong').max(2000),
   wa_template_selesai: z.string().trim().min(1, 'Template tidak boleh kosong').max(2000),
   wa_template_diserahkan: z.string().trim().min(1, 'Template tidak boleh kosong').max(2000),
@@ -73,6 +77,8 @@ function FormUsaha({ p }: { p: TPengaturan }) {
     silver_lady_grams: String(Number(p.silver_lady_grams ?? 6)).replace('.', ','),
     silver_man_grams: String(Number(p.silver_man_grams ?? 12)).replace('.', ','),
     receipt_show_signature: p.receipt_show_signature, receipt_footer: p.receipt_footer,
+    contact_label: p.contact_label ?? 'Admin IDS', signer_title: p.signer_title ?? 'Manager',
+    thanks_buyer: p.thanks_buyer ?? 'Terima kasih atas pembelian Anda', thanks_craftsman: p.thanks_craftsman ?? "Kami tukar se'adanya barang-barang buhan pian",
     wa_template_proses: p.wa_template_proses, wa_template_selesai: p.wa_template_selesai, wa_template_diserahkan: p.wa_template_diserahkan,
   })
   const { register, handleSubmit, formState, reset, setValue } = useForm<MasukanUsaha, unknown, DataUsaha>({ resolver: zodResolver(skemaUsaha), defaultValues: awal() })
@@ -140,7 +146,7 @@ function FormUsaha({ p }: { p: TPengaturan }) {
         </div>
       </Bagian>
 
-      <Bagian judul="Nota" sub="Nota pengrajin dan nota serah terima.">
+      <Bagian judul="Nota" sub="Berlaku untuk INVOICE (nota manual) dan Nota Pembayaran pengrajin. WhatsApp dan alamat diambil dari Identitas usaha di atas.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Bidang label="Ukuran kertas bawaan" id="s-kertas" bantuan="Bisa diganti di halaman cetak.">
             <select id="s-kertas" className={kelasPilih} {...register('receipt_paper')}>
@@ -151,7 +157,20 @@ function FormUsaha({ p }: { p: TPengaturan }) {
             <input type="checkbox" className="h-4 w-4 accent-navy-900" {...register('receipt_show_signature')} /> Tampilkan kolom tanda tangan
           </label>
         </div>
-        <div className="mt-4"><Bidang label="Kalimat penutup nota" id="s-kaki"><IsianPanjang id="s-kaki" rows={2} {...register('receipt_footer')} /></Bidang></div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Bidang label="Keterangan di samping nomor WA" id="s-label" galat={e.contact_label?.message} bantuan="Contoh: Admin IDS">
+            <Isian id="s-label" {...register('contact_label')} />
+          </Bidang>
+          <Bidang label="Jabatan di bawah tanda tangan" id="s-jabatan" galat={e.signer_title?.message} bantuan="Contoh: Manager">
+            <Isian id="s-jabatan" {...register('signer_title')} />
+          </Bidang>
+          <Bidang label="Ucapan di INVOICE (pembeli)" id="s-uc-beli" galat={e.thanks_buyer?.message}>
+            <IsianPanjang id="s-uc-beli" rows={2} {...register('thanks_buyer')} />
+          </Bidang>
+          <Bidang label="Ucapan di Nota Pembayaran (pengrajin)" id="s-uc-rajin" galat={e.thanks_craftsman?.message}>
+            <IsianPanjang id="s-uc-rajin" rows={2} {...register('thanks_craftsman')} />
+          </Bidang>
+        </div>
       </Bagian>
 
       <Bagian judul="Pesan WhatsApp" sub={`Penanda yang bisa dipakai: ${PENANDA.join(' ')}`}>

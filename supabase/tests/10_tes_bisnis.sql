@@ -529,10 +529,14 @@ end $$;
 
 \echo
 \echo '== T22 Pengaturan'
-do $$ begin
+do $$
+declare sebelum bigint := (select count(*) from public.activity_logs where action = 'pengaturan_diubah');
+begin
+  perform tes.sama('alamat usaha bawaan terisi', (select left(business_address, 15) from public.app_settings), 'Jl. Kertak Baru');
+  perform tes.sama('WA usaha bawaan terisi', (select business_whatsapp from public.app_settings), '6282156487531');
   update public.app_settings set business_whatsapp = '0811 2222 3333', business_address = 'Jl. Contoh No. 1' where id = 1;
   perform tes.sama('WA usaha dirapikan', (select business_whatsapp from public.app_settings), '6281122223333');
-  perform tes.sama('riwayat pengaturan_diubah', (select count(*) from public.activity_logs where action = 'pengaturan_diubah')::text, '1');
+  perform tes.sama('riwayat pengaturan_diubah', ((select count(*) from public.activity_logs where action = 'pengaturan_diubah') - sebelum)::text, '1');
   perform tes.gagal('zona waktu salah ditolak', $q$update public.app_settings set timezone = 'Mars/Olympus' where id = 1$q$, 'tidak dikenal');
   perform tes.gagal('baris pengaturan kedua ditolak', $q$insert into public.app_settings (id) values (2)$q$, 'permission denied');
 end $$;
@@ -865,6 +869,14 @@ begin
   perform tes.sama('harga boleh dikosongkan', (select coalesce(price::text, 'kosong') from public.products where id = p), 'kosong');
   update public.app_settings set signature_path = 'tanda-tangan/ttd-1.png' where id = 1;
   perform tes.sama('tanda tangan tersimpan', (select signature_path from public.app_settings), 'tanda-tangan/ttd-1.png');
+  -- T29: nota baru (kontak, jabatan, ucapan, LUNAS)
+  perform tes.sama('jabatan penanda tangan bawaan', (select signer_title from public.app_settings), 'Manager');
+  perform tes.sama('ucapan pengrajin', (select thanks_craftsman from public.app_settings), 'Kami tukar se''adanya barang-barang buhan pian');
+  perform tes.gagal('jabatan terlalu panjang ditolak', 'update public.app_settings set signer_title = repeat(''x'', 61) where id = 1', 'check');
+  insert into public.manual_notes (recipient, lines) values ('Uji LUNAS', '[]'::jsonb) returning id into p;
+  perform tes.sama('nota baru bawaan LUNAS', (select is_paid::text from public.manual_notes where id = p), 'true');
+  update public.manual_notes set is_paid = false where id = p;
+  perform tes.sama('LUNAS bisa dimatikan', (select is_paid::text from public.manual_notes where id = p), 'false');
 end $$;
 reset role;
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Download, Eye, Printer, X } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Download, Eye, Printer, X } from 'lucide-react'
 import { pdfNotaPembayaran } from '../lib/pdfNota'
 import { pesanGalat } from '../lib/errors'
 import { useNotifikasi } from '../components/ui/Notifikasi'
@@ -10,7 +10,8 @@ import { akhirBulan, bacaRupiah, formatRupiah, formatTanggalHari, hariIni as tgl
 import { useMuat } from '../sync/useMuat'
 import { useSinkron } from '../sync/SyncProvider'
 import { KotakGalat, Pemuat, cx } from '../components/ui/ui'
-import { LogoResmi } from '../components/ui/LogoResmi'
+import { KertasNota } from '../components/nota/KertasNota'
+import { useIdentitasNota } from '../components/nota/useIdentitasNota'
 import { kelompokPengrajin } from '../lib/nota'
 
 // NOTA PEMBAYARAN pengrajin.
@@ -28,10 +29,15 @@ function simpanHarga(peta: Record<string, number>): void {
   try { localStorage.setItem(KUNCI_HARGA, JSON.stringify(peta)) } catch { /* abaikan */ }
 }
 
+const KUNCI_LUNAS = 'ids-nota-lunas'
+function bacaLunas(): boolean {
+  try { return localStorage.getItem(KUNCI_LUNAS) !== '0' } catch { return true }
+}
+
 function Baris({ label, isi }: { label: string; isi: ReactNode }) {
   return (
     <div className="flex gap-2">
-      <span className="w-40 shrink-0">{label}</span>
+      <span className="w-[8.5em] shrink-0">{label}</span>
       <span className="font-semibold">: {isi}</span>
     </div>
   )
@@ -41,14 +47,16 @@ interface Kelompok { id: string; kode: string; nama: string | null; barang: Bara
 
 interface KeadaanHalaman { tglBayar: string; sembunyi: Set<string> }
 
-function HalamanNota({ g, sempit, zona, harga, ubahHarga, lapor }: {
+function HalamanNota({ g, kertas, zona, harga, ubahHarga, lapor, lunas }: {
   g: Kelompok
-  sempit: boolean
+  kertas: Kertas
   zona: string
   harga: Record<string, number>
   ubahHarga: (id: string, n: number | null) => void
   lapor: (id: string, k: KeadaanHalaman) => void
+  lunas: boolean
 }) {
+  const identitas = useIdentitasNota()
   const [tglBayar, setTglBayar] = useState(() => tglHariIni(zona))
   const [sembunyi, setSembunyi] = useState<Set<string>>(new Set())
   useEffect(() => { lapor(g.id, { tglBayar, sembunyi }) }, [g.id, tglBayar, sembunyi, lapor])
@@ -57,53 +65,67 @@ function HalamanNota({ g, sempit, zona, harga, ubahHarga, lapor }: {
   // Kode OR: nomor order; bila satu order punya beberapa barang pengrajin ini, ditambah nomor barangnya.
   const kembar = new Map<string, number>()
   g.barang.forEach((b) => kembar.set(b.order_number, (kembar.get(b.order_number) ?? 0) + 1))
+  const sempit = kertas === '80mm' || kertas === '58mm'
 
   return (
-    <>
-      <div className="flex flex-col items-center gap-2 border-b-2 border-black pb-3 text-center">
-        <LogoResmi className={sempit ? 'max-h-8' : 'max-h-12'} />
-        <h1 className={cx('mt-1 font-bold tracking-[0.2em]', sempit ? 'text-sm' : 'text-xl')}>NOTA PEMBAYARAN</h1>
-      </div>
-      <div className="mt-3 space-y-0.5">
-        <Baris label="Nama pengrajin" isi={g.nama ?? '(nama belum diisi)'} />
-        <Baris label="ID pengrajin" isi={g.kode} />
-        <Baris label="Tanggal pembayaran" isi={
-          <>
-            <span className="hidden print:inline">{formatTanggalHari(tglBayar)}</span>
-            <input type="date" value={tglBayar} onChange={(e) => setTglBayar(e.target.value)} aria-label="Tanggal pembayaran"
-              className="rounded border border-ice-300 px-1 font-semibold print:hidden" />
-            <span className="ml-2 text-xs font-normal text-ink-muted print:hidden">{formatTanggalHari(tglBayar)}</span>
-          </>
-        } />
-      </div>
-
-      <table className="mt-4 w-full border-collapse">
+    <KertasNota
+      kertas={kertas}
+      judul="NOTA PEMBAYARAN"
+      nomor={<>Diterbitkan: {formatTanggalHari(tglHariIni(zona))}</>}
+      lunas={lunas}
+      ucapan={identitas.ucapanPengrajin}
+      jabatan={identitas.jabatan}
+      tampilTtd={identitas.tampilTtd}
+      kontak={identitas.kontak}
+      ttd={identitas.ttd ? <img src={identitas.ttd} alt="Tanda tangan" className="max-h-full max-w-full object-contain" /> : null}
+      penerima={
+        <div>
+          {!sempit && <p className="mb-1.5 font-display text-[1.6em] font-bold leading-tight text-[#2a2318]">Dibayarkan kepada:</p>}
+          <div className="space-y-0.5">
+            <Baris label="Nama pengrajin" isi={g.nama ?? '(nama belum diisi)'} />
+            <Baris label="ID pengrajin" isi={g.kode} />
+          </div>
+        </div>
+      }
+      tanggal={
+        <label className="relative inline-flex cursor-pointer items-center gap-1.5">
+          Tanggal pembayaran: <span className="font-semibold underline decoration-dotted decoration-[#8E6C27] underline-offset-4 print:no-underline">{formatTanggalHari(tglBayar)}</span>
+          <CalendarDays className="h-4 w-4 text-[#8E6C27] print:hidden" aria-hidden />
+          <input type="date" value={tglBayar} onChange={(e) => e.target.value && setTglBayar(e.target.value)} aria-label="Ubah tanggal pembayaran"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0 print:hidden" />
+        </label>
+      }
+    >
+      <table className="tabel-nota">
+        <colgroup>
+          <col className={sempit ? 'w-[9%]' : 'w-[8%]'} /><col className="w-[22%]" /><col /><col className="w-[30%]" /><col className="w-[7%] print:hidden" />
+        </colgroup>
         <thead>
-          <tr className="border-y-2 border-black text-left">
-            <th className="w-8 py-1.5 pr-2">No</th>
-            <th className="py-1.5 pr-2">Kode OR</th>
-            <th className="py-1.5 pr-2">Kategori + Gender</th>
-            <th className="py-1.5 text-right">Harga Satuan</th>
-            <th className="w-6 print:hidden" aria-label="Sembunyikan" />
+          <tr>
+            <th className="text-center">No</th>
+            <th className="text-left">Kode OR</th>
+            <th className="text-left">Kategori + Gender</th>
+            <th className="text-right">Harga Satuan</th>
+            <th className="print:hidden" aria-label="Sembunyikan" />
           </tr>
         </thead>
         <tbody>
           {barang.map((b, i) => (
-            <tr key={b.id} className="break-inside-avoid border-b border-black/40 align-middle">
-              <td className="py-1.5 pr-2">{i + 1}</td>
-              <td className="py-1.5 pr-2 font-semibold">{b.order_number}{(kembar.get(b.order_number) ?? 0) > 1 && <span className="font-normal">-{b.item_no}</span>}</td>
-              <td className="py-1.5 pr-2">{b.category_name} {b.gender}</td>
-              <td className="py-1 text-right">
+            <tr key={b.id} className="break-inside-avoid">
+              <td className="text-center">{i + 1}</td>
+              <td className="font-semibold">{b.order_number}{(kembar.get(b.order_number) ?? 0) > 1 && <span className="font-normal">-{b.item_no}</span>}</td>
+              <td>{b.category_name} {b.gender}</td>
+              <td className="text-right">
                 <input
                   inputMode="numeric"
                   aria-label={`Harga satuan barang ${i + 1}`}
                   placeholder="ketik harga"
                   value={harga[b.id] != null ? ketikRupiah(String(harga[b.id])) : ''}
                   onChange={(e) => ubahHarga(b.id, bacaRupiah(e.target.value.replace(/\./g, '')))}
-                  className="isian-nota w-full max-w-[9rem] rounded border border-dashed border-ice-400 bg-gold-50/40 px-1.5 py-0.5 text-right tabular-nums placeholder:text-ink-muted/70"
+                  className="isian-nota w-full rounded border border-dashed border-[#c9b27e] bg-[#fffaf0] px-1 py-0.5 text-right tabular-nums placeholder:text-[#a8956a]"
                 />
               </td>
-              <td className="pl-1 print:hidden">
+              <td className="text-center print:hidden">
                 <button type="button" title="Sembunyikan dari nota" onClick={() => setSembunyi((s) => new Set(s).add(b.id))}
                   className="rounded p-0.5 text-ink-muted hover:bg-bad-50 hover:text-bad-700"><X className="h-3.5 w-3.5" /></button>
               </td>
@@ -114,24 +136,19 @@ function HalamanNota({ g, sempit, zona, harga, ubahHarga, lapor }: {
           )}
         </tbody>
         <tfoot>
-          <tr className="border-y-2 border-black font-bold">
-            <td colSpan={3} className="py-2 pr-2 text-right tracking-[0.15em]">TOTAL</td>
-            <td className="py-2 text-right tabular-nums">{formatRupiah(total)}</td>
+          <tr className="total-nota">
+            <td colSpan={3} className="text-right">TOTAL</td>
+            <td className="text-right tabular-nums">{formatRupiah(total)}</td>
             <td className="print:hidden" />
           </tr>
         </tfoot>
       </table>
       {sembunyi.size > 0 && (
-        <button type="button" onClick={() => setSembunyi(new Set())} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-navy-800 print:hidden">
+        <button type="button" onClick={() => setSembunyi(new Set())} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#8E6C27] print:hidden">
           <Eye className="h-3.5 w-3.5" /> Tampilkan lagi {sembunyi.size} barang yang disembunyikan
         </button>
       )}
-
-      <div className={cx('mt-10 flex items-end gap-4', sempit ? 'flex-col items-center text-center' : 'justify-between')}>
-        <LogoResmi className={sempit ? 'max-h-7' : 'max-h-10'} />
-        <p className="text-[11px]">Diterbitkan pada: <span className="font-semibold">{formatTanggalHari(tglHariIni(zona))}</span></p>
-      </div>
-    </>
+    </KertasNota>
   )
 }
 
@@ -144,6 +161,9 @@ export default function Nota() {
   const keadaan = useRef(new Map<string, KeadaanHalaman>())
   const [lapor] = useState(() => (idHal: string, k: KeadaanHalaman) => { keadaan.current.set(idHal, k) })
   const [membuatPdf, setMembuatPdf] = useState(false)
+  const [lunas, setLunasState] = useState(bacaLunas)
+  const setLunas = (v: boolean) => { setLunasState(v); try { localStorage.setItem(KUNCI_LUNAS, v ? '1' : '0') } catch { /* abaikan */ } }
+  const identitas = useIdentitasNota()
   const { beri } = useNotifikasi()
   const periode = jenis === 'pembayaran'
   const awalBulan = `${tglHariIni(zona).slice(0, 8)}01`
@@ -188,7 +208,7 @@ export default function Nota() {
   // Ukuran kertas untuk dialog cetak browser.
   useEffect(() => {
     const gaya = document.createElement('style')
-    gaya.textContent = kertas === 'A4' ? '@page { size: A4; margin: 14mm; }' : kertas === 'A5' ? '@page { size: A5; margin: 10mm; }' : `@page { size: ${kertas} auto; margin: 3mm; }`
+    gaya.textContent = kertas === 'A4' ? '@page { size: A4; margin: 0; }' : kertas === 'A5' ? '@page { size: A5; margin: 0; }' : `@page { size: ${kertas} auto; margin: 3mm; }`
     document.head.appendChild(gaya)
     return () => gaya.remove()
   }, [kertas])
@@ -220,7 +240,10 @@ export default function Nota() {
         }
       })
       const nama = kelompok.length === 1 ? `Nota-Pembayaran-${kelompok[0].kode.replace(/\s+/g, '')}` : 'Nota-Pembayaran'
-      await pdfNotaPembayaran(halaman, kertas, formatTanggalHari(tglHariIni(zona)), `${nama}-${tglHariIni(zona)}.pdf`)
+      await pdfNotaPembayaran(halaman, kertas, formatTanggalHari(tglHariIni(zona)), `${nama}-${tglHariIni(zona)}.pdf`, {
+        lunas, ucapan: identitas.ucapanPengrajin, jabatan: identitas.jabatan, kontak: identitas.kontak,
+        tandaTanganUrl: identitas.tampilTtd ? identitas.ttd : null, tampilTtd: identitas.tampilTtd,
+      })
     } catch (e) {
       beri(pesanGalat(e), 'galat')
     } finally {
@@ -229,16 +252,20 @@ export default function Nota() {
   }
 
   const sempit = kertas === '80mm' || kertas === '58mm'
-  const lebar = kertas === 'A4' ? 'max-w-[190mm]' : kertas === 'A5' ? 'max-w-[128mm]' : kertas === '80mm' ? 'max-w-[74mm]' : 'max-w-[52mm]'
+  const lebar = kertas === 'A4' ? 'max-w-[210mm]' : kertas === 'A5' ? 'max-w-[148mm]' : kertas === '80mm' ? 'max-w-[80mm]' : 'max-w-[58mm]'
 
   return (
     <div className="min-h-dvh bg-ice-100 print:bg-white">
       <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-ice-200 bg-white px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] print:hidden">
         <Link to={data.data?.kembali ?? '/beranda'} className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-soft"><ArrowLeft className="h-4 w-4" /> Kembali</Link>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <select aria-label="Ukuran kertas" value={kertas} onChange={(e) => setKertas(e.target.value as Kertas)} className="h-10 rounded-xl border border-ice-300 bg-white px-3 text-sm">
             <option value="A4">A4</option><option value="A5">A5</option><option value="80mm">Thermal 80 mm</option><option value="58mm">Thermal 58 mm</option>
           </select>
+          <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-ice-300 bg-white px-3 text-sm font-semibold text-navy-900">
+            <input type="checkbox" className="h-4 w-4 accent-[#c62828]" checked={lunas} onChange={(e) => setLunas(e.target.checked)} />
+            <span className="text-[#c62828]">LUNAS</span>
+          </label>
           <button type="button" disabled={membuatPdf} onClick={() => void simpanPdfNota()}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-gold-300 bg-white px-4 text-sm font-semibold text-navy-900 hover:bg-gold-50 disabled:opacity-60">
             <Download className="h-4 w-4" /> {membuatPdf ? 'Membuat PDF…' : 'Simpan PDF'}
@@ -263,10 +290,10 @@ export default function Nota() {
         </p>
       </div>
 
-      <div className={cx('mx-auto my-6 bg-white p-6 text-black shadow-card print:my-0 print:max-w-none print:p-0 print:shadow-none', lebar, sempit ? 'text-[11px]' : kertas === 'A5' ? 'text-[12px]' : 'text-[13px]')}>
+      <div className={cx('mx-auto my-4 space-y-6 px-3 sm:my-6 print:my-0 print:max-w-none print:space-y-0 print:px-0', lebar)}>
         {kelompok.map((g, gi, arr) => (
-          <section key={g.id} className={cx(gi < arr.length - 1 && 'break-after-page pb-12 print:pb-0')}>
-            <HalamanNota g={g} sempit={sempit} zona={zona} harga={harga} ubahHarga={ubahHarga} lapor={lapor} />
+          <section key={g.id} className={cx('overflow-hidden rounded-xl shadow-card print:overflow-visible print:rounded-none print:shadow-none', sempit && 'bg-white', gi < arr.length - 1 && 'break-after-page')}>
+            <HalamanNota g={g} kertas={kertas} zona={zona} harga={harga} ubahHarga={ubahHarga} lapor={lapor} lunas={lunas} />
           </section>
         ))}
       </div>

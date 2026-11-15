@@ -29,3 +29,12 @@ export function tautanWa(nomor: string, pesan: string): string {
   const n = normalisasiWa(nomor) ?? ''
   return `https://wa.me/${n}?text=${encodeURIComponent(pesan)}`
 }
+
+/** Nomor WhatsApp dengan kode negara untuk nota: +62 821-5648-7531. */
+export function waInternasional(nomor: string | null | undefined): string | null {
+  const n = normalisasiWa(nomor)
+  if (!n) return null
+  if (!n.startsWith('62')) return '+' + n
+  const r = n.slice(2)
+  return '+62 ' + r.replace(/^(\d{3})(\d{4})(\d+)$/, '$1-$2-$3')
+}
