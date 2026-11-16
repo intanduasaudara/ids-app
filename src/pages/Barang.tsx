@@ -1,3 +1,4 @@
+import { useAturanOvertime } from '../lib/overtime'
 import { useEffect, useState } from 'react'
 import { formatBerat } from '../lib/orderSchema'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -28,7 +29,7 @@ function bersihkan(q: string): string {
 type Kueri = any
 
 /** Menerapkan kata cari dan saringan ke kueri v_items. Dipakai untuk tampilan dan ekspor. */
-function terapkan(q: Kueri, p: URLSearchParams): Kueri {
+function terapkan(q: Kueri, p: URLSearchParams, batasOvertime: string): Kueri {
   const cari = bersihkan(p.get('q') ?? '')
   if (cari) {
     // Setiap kata harus cocok di salah satu kolom: and(or(kata1...), or(kata2...)).
@@ -53,6 +54,7 @@ function terapkan(q: Kueri, p: URLSearchParams): Kueri {
   if (p.get('gender')) q = q.eq('gender', p.get('gender'))
   const st = p.get('status')
   if (st === 'belum_diserahkan') q = q.neq('status', 'diserahkan')
+  else if (st === 'overtime') q = q.eq('status', 'dalam_proses').eq('is_active', true).lte('assigned_date', batasOvertime)
   else if (st) q = q.eq('status', st)
   if (p.get('tahun')) q = q.eq('production_year', Number(p.get('tahun')))
   if (p.get('bulan')) q = q.eq('production_month_no', Number(p.get('bulan')))
@@ -63,6 +65,7 @@ function terapkan(q: Kueri, p: URLSearchParams): Kueri {
 
 export default function Barang() {
   const [param, setParam] = useSearchParams()
+  const aturanOT = useAturanOvertime()
   const { zona } = useSinkron()
   const { beri } = useNotifikasi()
   const master = useMaster()
@@ -94,7 +97,7 @@ export default function Barang() {
 
   const data = useMuat(async () => {
     let q = db().from('v_items').select('*', { count: 'exact' })
-    q = terapkan(q, param)
+    q = terapkan(q, param, aturanOT.batas)
     const { data, error, count } = await q
       .order('assigned_date', { ascending: false })
       .order('order_number', { ascending: false })
@@ -114,7 +117,7 @@ export default function Barang() {
     try {
       const semua: TBarang[] = []
       for (let dari = 0; dari < 20000; dari += 1000) {
-        const { data, error } = await terapkan(db().from('v_items').select('*'), param).order('assigned_date').order('order_number').order('item_no').range(dari, dari + 999)
+        const { data, error } = await terapkan(db().from('v_items').select('*'), param, aturanOT.batas).order('assigned_date').order('order_number').order('item_no').range(dari, dari + 999)
         if (error) throw error
         semua.push(...(data as TBarang[]))
         if ((data as TBarang[]).length < 1000) break
@@ -164,6 +167,7 @@ export default function Barang() {
         <select aria-label="Status" className={KELAS_PILIH} value={param.get('status') ?? ''} onChange={(e) => ubah('status', e.target.value)}>
           <option value="">Semua status</option>
           {(['dalam_proses', 'diserahkan'] as StatusBarang[]).map((s) => <option key={s} value={s}>{LABEL_STATUS[s]}</option>)}
+          <option value="overtime">Overtime (lewat {aturanOT.hariBatas} hari)</option>
         </select>
         <select aria-label="Tahun produksi" className={KELAS_PILIH} value={param.get('tahun') ?? ''} onChange={(e) => ubah('tahun', e.target.value)}>
           <option value="">Semua tahun</option>

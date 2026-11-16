@@ -17,9 +17,10 @@ import { DaftarRiwayat } from '../../components/DaftarRiwayat'
 import { KonfirmasiHapusPengrajin, KonfirmasiStatusPengrajin } from './AksiPengrajin'
 import { DialogSelesaiPengerjaan } from './SelesaiPengerjaan'
 import { PerakPengrajin } from '../perak/PerakPengrajin'
+import { useAturanOvertime, useOvertimePerPengrajin } from '../../lib/overtime'
 
 const PER_HALAMAN = 25
-type SaringStatus = 'semua' | StatusBarang
+type SaringStatus = 'semua' | StatusBarang | 'overtime'
 
 /** Hapus karakter yang punya arti khusus di filter PostgREST. */
 function bersihkanCari(q: string): string {
@@ -42,6 +43,8 @@ export function DetailPengrajin() {
   const [status, setStatus] = useState<SaringStatus>('semua')
   const [tampilBatal, setTampilBatal] = useState(false)
   const [halaman, setHalaman] = useState(0)
+  const aturan = useAturanOvertime()
+  const overtime = useOvertimePerPengrajin()
 
   // Pencarian dijalankan setelah berhenti mengetik sebentar.
   useEffect(() => {
@@ -79,7 +82,8 @@ export function DetailPengrajin() {
       .order('item_no')
       .range(halaman * PER_HALAMAN, halaman * PER_HALAMAN + PER_HALAMAN - 1)
     if (!tampilBatal) q = q.eq('is_active', true)
-    if (status !== 'semua') q = q.eq('status', status)
+    if (status === 'overtime') q = q.eq('status', 'dalam_proses').eq('is_active', true).lte('assigned_date', aturan.batas)
+    else if (status !== 'semua') q = q.eq('status', status)
     if (cariAktif) {
       const s = `"%${cariAktif}%"`
       q = q.or(`order_number.ilike.${s},customer_name.ilike.${s},category_name.ilike.${s},description.ilike.${s}`)
@@ -87,7 +91,7 @@ export function DetailPengrajin() {
     const { data, error, count } = await q
     if (error) throw error
     return { baris: (data ?? []) as Barang[], total: count ?? 0 }
-  }, [id, versi, halaman, status, cariAktif, tampilBatal])
+  }, [id, versi, halaman, status, cariAktif, tampilBatal, aturan.batas])
 
   const riwayat = useMuat(async () => {
     const { data, error } = await db()
@@ -119,6 +123,7 @@ export function DetailPengrajin() {
     { label: 'Total barang', nilai: p.total_items, warna: 'text-navy-900' },
     { label: 'Dalam proses', nilai: p.qty_dalam_proses, warna: 'text-navy-700' },
     { label: 'Sudah diserahkan', nilai: p.qty_diserahkan, warna: 'text-ok-600' },
+    { label: `Overtime (lewat ${aturan.hariBatas} hari)`, nilai: overtime.data?.peta.get(p.id) ?? 0, warna: 'text-[#c62828]', merah: true },
   ]
 
   return (
@@ -164,10 +169,14 @@ export function DetailPengrajin() {
       {/* Angka */}
       <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {statistik.map((s) => (
-          <Kartu key={s.label} className="p-4">
-            <p className="text-xs font-semibold text-ink-muted">{s.label}</p>
+          <div key={s.label} role={'merah' in s && s.nilai > 0 ? 'button' : undefined}
+            onClick={'merah' in s && s.nilai > 0 ? () => { setStatus('overtime'); setHalaman(0) } : undefined}
+            className={cx('merah' in s && s.nilai > 0 && 'cursor-pointer')}>
+          <Kartu className={cx('h-full p-4', 'merah' in s && s.nilai > 0 && 'ring-1 ring-[#c62828]/40')}>
+            <p className={cx('text-xs font-semibold', 'merah' in s ? 'font-bold text-[#c62828]' : 'text-ink-muted')}>{s.label}</p>
             <p className={cx('mt-1 text-3xl font-bold tabular-nums', s.warna)}>{formatAngka(s.nilai)}</p>
           </Kartu>
+          </div>
         ))}
       </div>
       <p className="mt-2 text-xs text-ink-muted">Angka di atas tidak menghitung barang atau order yang dibatalkan.</p>
@@ -181,7 +190,7 @@ export function DetailPengrajin() {
             <Isian aria-label="Cari di riwayat order" placeholder="Cari nomor order, pelanggan, kategori" className="pl-10" value={cari} onChange={(e) => setCari(e.target.value)} />
           </div>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Saring status">
-            {(['semua', 'dalam_proses', 'diserahkan'] as SaringStatus[]).map((s) => (
+            {(['semua', 'dalam_proses', 'diserahkan', 'overtime'] as SaringStatus[]).map((s) => (
               <button
                 key={s}
                 type="button"
@@ -189,10 +198,12 @@ export function DetailPengrajin() {
                 onClick={() => { setStatus(s); setHalaman(0) }}
                 className={cx(
                   'rounded-full border px-3 py-1.5 text-xs font-semibold',
-                  status === s ? 'border-navy-900 bg-navy-900 text-white' : 'border-ice-300 bg-white text-ink-soft hover:border-navy-700',
+                  s === 'overtime'
+                    ? (status === s ? 'border-[#c62828] bg-[#c62828] text-white' : 'border-[#c62828]/50 bg-white text-[#c62828] hover:border-[#c62828]')
+                    : status === s ? 'border-navy-900 bg-navy-900 text-white' : 'border-ice-300 bg-white text-ink-soft hover:border-navy-700',
                 )}
               >
-                {s === 'semua' ? 'Semua' : LABEL_STATUS[s]}
+                {s === 'semua' ? 'Semua' : s === 'overtime' ? 'Overtime' : LABEL_STATUS[s]}
               </button>
             ))}
           </div>
@@ -237,7 +248,10 @@ export function DetailPengrajin() {
                         <td className="px-4 py-3 text-right tabular-nums">{formatBerat(b.weight_grams)}</td>
                         <td className="px-4 py-3">{b.category_name} <span className="text-xs text-ink-muted">· {b.gender}</span></td>
                         <td className="px-4 py-3 tabular-nums" title={formatTanggal(b.assigned_date)}>{formatTanggalPendek(b.assigned_date)}</td>
-                        <td className="px-4 py-3"><LencanaStatus status={b.status} batal={!b.is_active} /></td>
+                        <td className="px-4 py-3">
+                          <LencanaStatus status={b.status} batal={!b.is_active} />
+                          {b.is_active && aturan.lewat(b.status, b.assigned_date) > 0 && <LabelOvertime hari={aturan.lewat(b.status, b.assigned_date)} />}
+                        </td>
                         <td className="px-4 py-3 tabular-nums" title={formatTanggalWaktu(b.completed_at, zona)}>
                           {b.completed_at ? formatTanggalPendek(tglLokal(b.completed_at, zona)) : '-'}
                         </td>
@@ -264,10 +278,13 @@ export function DetailPengrajin() {
                           <p className="font-semibold text-navy-900">Order {b.order_number} <span className="text-xs font-normal text-ink-muted">#{b.item_no}</span></p>
                           <p className="text-sm text-ink-soft">{b.weight_grams != null ? formatBerat(b.weight_grams) : b.customer_name}</p>
                         </div>
-                        <LencanaStatus status={b.status} batal={!b.is_active} />
+                        <div className="flex flex-col items-end gap-1">
+                          <LencanaStatus status={b.status} batal={!b.is_active} />
+                          {b.is_active && aturan.lewat(b.status, b.assigned_date) > 0 && <LabelOvertime hari={aturan.lewat(b.status, b.assigned_date)} />}
+                        </div>
                       </div>
                       <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                        <div><dt className="text-ink-muted">Diterima</dt><dd className="font-semibold text-navy-900">{formatTanggalPendek(b.assigned_date)}</dd></div>
+                        <div><dt className="text-ink-muted">Diterima</dt><dd className={cx('font-semibold', b.is_active && aturan.lewat(b.status, b.assigned_date) > 0 ? 'text-[#c62828]' : 'text-navy-900')}>{formatTanggalPendek(b.assigned_date)}</dd></div>
                         <div><dt className="text-ink-muted">Selesai</dt><dd className="font-semibold text-navy-900">{b.completed_at ? formatTanggalPendek(tglLokal(b.completed_at, zona)) : '-'}</dd></div>
                         <div><dt className="text-ink-muted">Diserahkan</dt><dd className="font-semibold text-navy-900">{b.delivered_at ? formatTanggalPendek(tglLokal(b.delivered_at, zona)) : '-'}</dd></div>
                       </dl>
@@ -312,5 +329,14 @@ export function DetailPengrajin() {
       <DialogSelesaiPengerjaan pengrajin={selesai ? p : null} tutup={() => setSelesai(false)} berubah={pengrajin.muatUlang} />
       <KonfirmasiHapusPengrajin pengrajin={tanyaArsip ? p : null} tutup={() => setTanyaArsip(false)} berubah={() => navigasi('/pengrajin', { replace: true })} />
     </>
+  )
+}
+
+/** Label merah untuk barang yang sudah lewat batas hari sejak diterima pengrajin. */
+function LabelOvertime({ hari }: { hari: number }) {
+  return (
+    <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-[#c62828]/40 bg-[#fdecec] px-2 py-0.5 text-[10px] font-bold tracking-wide text-[#c62828]">
+      OVERTIME · lewat {hari} hari
+    </span>
   )
 }

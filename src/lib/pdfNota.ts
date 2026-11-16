@@ -326,6 +326,18 @@ function gayaTabel(a5: boolean, sempit: boolean) {
   }
 }
 
+/**
+ * Judul kolom dan baris TOTAL ikut rata seperti angkanya: kolom angka rata kanan sampai ujung,
+ * kolom nomor/banyaknya rata tengah. Berlaku untuk kepala, isi, dan kaki tabel.
+ */
+function sejajarkan(tengah: number[], kanan: number[]) {
+  return (d: { section: string; column: { index: number }; cell: { colSpan?: number; styles: { halign?: string } } }) => {
+    if (d.section === 'foot' && (d.cell.colSpan ?? 1) > 1) return
+    if (kanan.includes(d.column.index)) d.cell.styles.halign = 'right'
+    else if (tengah.includes(d.column.index)) d.cell.styles.halign = 'center'
+  }
+}
+
 /* --------------------------------------------------------- struk sempit 80/58 */
 
 function strukSempit(doc: Doc, aset: Aset, judul: string, nomor: string, info: string[][], tabel: (y: number) => void, o: OpsiNotaPdf) {
@@ -446,6 +458,7 @@ export async function pdfNotaPembayaran(halaman: HalamanPembayaran[], kertas: Ke
       margin: { left: m, right: m, bottom: sempit ? 4 : W * 0.06 + 8, top: sempit ? 4 : W * 0.06 + 8 },
       ...gaya,
       columnStyles: { 0: { cellWidth: sempit ? 6 : W * 0.07, halign: 'center' }, 3: { halign: 'right', cellWidth: sempit ? 18 : W * 0.26 } },
+      didParseCell: sejajarkan([0], [3]),
       didDrawPage: sempit ? undefined : (d: { pageNumber: number }) => { if (d.pageNumber > 1) hiasanHalaman(doc, aset) },
     })
 
@@ -523,6 +536,7 @@ export async function pdfNotaManual(n: NotaManualPdf, kertas: 'A4' | 'A5', namaB
     margin: { left: m, right: m, bottom: W * 0.06 + 8, top: W * 0.06 + 8 },
     ...gayaTabel(a5, false),
     columnStyles: { 0: { cellWidth: W * 0.15, halign: 'center' }, 2: { halign: 'right', cellWidth: W * 0.2 }, 3: { halign: 'right', cellWidth: W * 0.2 } },
+    didParseCell: sejajarkan([0], [2, 3]),
     didDrawPage: (d: { pageNumber: number }) => { if (d.pageNumber > 1) hiasanHalaman(doc, aset) },
   })
   kaki(doc, aset, n, akhirTabel(doc))

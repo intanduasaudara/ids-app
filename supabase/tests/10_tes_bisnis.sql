@@ -877,6 +877,10 @@ begin
   perform tes.sama('nota baru bawaan LUNAS', (select is_paid::text from public.manual_notes where id = p), 'true');
   update public.manual_notes set is_paid = false where id = p;
   perform tes.sama('LUNAS bisa dimatikan', (select is_paid::text from public.manual_notes where id = p), 'false');
+  -- T30: batas overtime
+  perform tes.sama('batas overtime bawaan 10 hari', (select overtime_days::text from public.app_settings), '10');
+  perform tes.gagal('batas overtime 0 ditolak', 'update public.app_settings set overtime_days = 0 where id = 1', 'check');
+  perform tes.gagal('batas overtime 91 ditolak', 'update public.app_settings set overtime_days = 91 where id = 1', 'check');
 end $$;
 reset role;
 

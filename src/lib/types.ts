@@ -89,6 +89,7 @@ export interface Pengaturan {
   silver_man_grams: number
   signature_path: string | null
   signer_title: string
+  overtime_days: number
   contact_label: string
   thanks_buyer: string
   thanks_craftsman: string

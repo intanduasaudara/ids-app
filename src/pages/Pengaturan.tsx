@@ -53,6 +53,11 @@ const skemaUsaha = z.object({
     z.number({ required_error: 'Isi berat minimal', invalid_type_error: 'Berat harus angka, contoh 6' })
       .gt(0, 'Harus lebih dari 0').max(1000, 'Maksimal 1000 gram'),
   ),
+  overtime_days: z.preprocess(
+    (v) => (typeof v === 'string' ? (v.trim() === '' ? undefined : Number(v)) : v),
+    z.number({ required_error: 'Isi batas hari', invalid_type_error: 'Harus angka, contoh 10' })
+      .int('Harus bilangan bulat').min(1, 'Minimal 1 hari').max(90, 'Maksimal 90 hari'),
+  ),
   receipt_show_signature: z.boolean(),
   receipt_footer: z.string().max(300),
   contact_label: z.string().trim().max(60, 'Maksimal 60 huruf'),
@@ -74,6 +79,7 @@ function FormUsaha({ p }: { p: TPengaturan }) {
     business_whatsapp: p.business_whatsapp ? tampilkanWa(p.business_whatsapp) : '', timezone: p.timezone,
     date_format: p.date_format === 'dd/MM/yyyy' ? 'dd/MM/yyyy' : 'dd MMMM yyyy', receipt_paper: p.receipt_paper,
     min_weight_grams: String(Number(p.min_weight_grams ?? 6)).replace('.', ','),
+    overtime_days: String(p.overtime_days ?? 10),
     silver_lady_grams: String(Number(p.silver_lady_grams ?? 6)).replace('.', ','),
     silver_man_grams: String(Number(p.silver_man_grams ?? 12)).replace('.', ','),
     receipt_show_signature: p.receipt_show_signature, receipt_footer: p.receipt_footer,
@@ -98,7 +104,7 @@ function FormUsaha({ p }: { p: TPengaturan }) {
         business_whatsapp: d.business_whatsapp?.trim() ? normalisasiWa(d.business_whatsapp) : null,
       }).eq('id', 1)
       if (error) throw error
-      reset({ ...d, min_weight_grams: String(d.min_weight_grams).replace('.', ','), silver_lady_grams: String(d.silver_lady_grams).replace('.', ','), silver_man_grams: String(d.silver_man_grams).replace('.', ',') })
+      reset({ ...d, overtime_days: String(d.overtime_days), min_weight_grams: String(d.min_weight_grams).replace('.', ','), silver_lady_grams: String(d.silver_lady_grams).replace('.', ','), silver_man_grams: String(d.silver_man_grams).replace('.', ',') })
       beri('Pengaturan disimpan.')
     } catch (e) {
       setGalat(pesanGalat(e))
@@ -142,6 +148,10 @@ function FormUsaha({ p }: { p: TPengaturan }) {
           <Bidang label="Pemakaian minimal per barang (gram)" id="s-berat" galat={e.min_weight_grams?.message}
             bantuan="Otomatis terisi di setiap barang baru. Berat di bawah angka ini ditolak.">
             <Isian id="s-berat" inputMode="decimal" {...register('min_weight_grams')} />
+          </Bidang>
+          <Bidang label="Batas OVERTIME (hari)" id="s-ot" galat={e.overtime_days?.message}
+            bantuan="Barang yang masih dalam proses lewat dari jumlah hari ini sejak diterima pengrajin ditandai OVERTIME merah.">
+            <Isian id="s-ot" inputMode="numeric" {...register('overtime_days')} />
           </Bidang>
         </div>
       </Bagian>

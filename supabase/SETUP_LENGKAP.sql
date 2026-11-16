@@ -2,7 +2,7 @@
 -- IDS — INTAN DUA SAUDARA  |  SETUP DATABASE LENGKAP (Fase 1)
 -- Cara pakai: Supabase > SQL Editor > New query > tempel SEMUA isi file ini > Run.
 -- Aman dijalankan ulang: tidak menggandakan data dan tidak menghapus data.
--- Isi: gabungan 16 file di folder supabase/migrations (urutan sama).
+-- Isi: gabungan 17 file di folder supabase/migrations (urutan sama).
 -- =====================================================================
 
 
@@ -2688,3 +2688,11 @@ alter table public.manual_notes add column if not exists is_paid boolean not nul
 -- Jabatan di bawah tanda tangan nota: Direktur (sebelumnya Manager). Aman dijalankan ulang.
 alter table public.app_settings alter column signer_title set default 'Direktur';
 update public.app_settings set signer_title = 'Direktur' where signer_title = 'Manager';
+
+-- >>>>>>>>>> 20261116001700_overtime.sql
+-- OVERTIME: batas hari sejak barang diterima pengrajin. Barang yang masih dalam proses dan lewat
+-- dari batas ini ditandai merah di aplikasi (hari ke-10 masih tepat waktu, mulai hari ke-11 overtime).
+-- Aman dijalankan ulang.
+alter table public.app_settings add column if not exists overtime_days integer not null default 10;
+alter table public.app_settings drop constraint if exists app_settings_overtime_days_check;
+alter table public.app_settings add constraint app_settings_overtime_days_check check (overtime_days between 1 and 90);

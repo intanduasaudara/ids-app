@@ -1,7 +1,8 @@
+import { useAturanOvertime, useOvertimePerPengrajin } from '../lib/overtime'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowRight, Boxes, Clock, Gem, HandHeart, Plus, ShoppingBag, Users } from 'lucide-react'
+import { AlarmClock, ArrowRight, Boxes, Clock, Gem, HandHeart, Plus, ShoppingBag, Users } from 'lucide-react'
 import { db } from '../lib/supabase'
 import { formatAngka, formatTanggal, formatTanggalPanjang, hariIni as tglHariIni } from '../lib/format'
 import { daftarBulan, type Rentang } from '../lib/periode'
@@ -44,6 +45,8 @@ export default function Beranda() {
   const versi = useVersiData(['orders', 'order_items', 'craftsmen', 'jewelry_categories'])
   const { dari, sampai } = periode.rentang
   const grafik = rentangGrafik(periode)
+  const aturanOT = useAturanOvertime()
+  const overtime = useOvertimePerPengrajin()
 
   const data = useMuat(async () => {
     const [s, b, p, k, o] = await Promise.all([
@@ -82,9 +85,10 @@ export default function Beranda() {
         { label: 'Sudah diserahkan', nilai: s.sudah_diserahkan, Ikon: HandHeart, ke: '/barang?status=diserahkan', nada: 'hijau' },
         { label: 'Pengrajin aktif', nilai: s.pengrajin_aktif, Ikon: Users, ke: '/pengrajin', nada: 'navy' },
         { label: 'Order bulan ini', nilai: s.order_bulan_ini, Ikon: Gem, ke: '/order', nada: 'emas' },
+        { label: `Overtime (lewat ${aturanOT.hariBatas} hari)`, nilai: overtime.data?.total ?? 0, Ikon: AlarmClock, ke: '/barang?status=overtime', nada: 'merah' },
       ]
     : []
-  const NADA: Record<string, string> = { navy: 'bg-navy-900 text-gold-200', ice: 'bg-ice-100 text-navy-800', emas: 'bg-gold-100 text-gold-700', hijau: 'bg-ok-50 text-ok-700' }
+  const NADA: Record<string, string> = { navy: 'bg-navy-900 text-gold-200', ice: 'bg-ice-100 text-navy-800', emas: 'bg-gold-100 text-gold-700', hijau: 'bg-ok-50 text-ok-700', merah: 'bg-[#fdecec] text-[#c62828]' }
 
   return (
     <div>
@@ -109,14 +113,14 @@ export default function Beranda() {
           {/* Kartu angka */}
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
             {kartu.map((k, i) => (
-              <motion.div key={k.label} custom={i} variants={masuk} initial="tersembunyi" animate="tampil">
+              <motion.div key={k.label} custom={i} variants={masuk} initial="tersembunyi" animate="tampil" className={cx(k.nada === 'merah' && 'col-span-2 lg:col-span-1')}>
                 <Link to={k.ke} className="group block h-full rounded-xl2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400">
                   <Kartu className="kartu-pantul h-full p-4 group-hover:border-gold-300 sm:p-5">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs font-semibold text-ink-muted sm:text-sm">{k.label}</p>
+                      <p className={cx('text-xs font-semibold sm:text-sm', k.nada === 'merah' ? 'font-bold text-[#c62828]' : 'text-ink-muted')}>{k.label}</p>
                       <span className={cx('rounded-lg p-1.5', NADA[k.nada])}><k.Ikon className="h-4 w-4" aria-hidden /></span>
                     </div>
-                    <p className="mt-2 font-display text-4xl font-semibold tabular-nums text-navy-900">{formatAngka(k.nilai)}</p>
+                    <p className={cx('mt-2 font-display text-4xl font-semibold tabular-nums', k.nada === 'merah' ? 'text-[#c62828]' : 'text-navy-900')}>{formatAngka(k.nilai)}</p>
                   </Kartu>
                 </Link>
               </motion.div>

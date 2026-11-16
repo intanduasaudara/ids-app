@@ -13,6 +13,7 @@ import {
 import { FormPengrajin } from './FormPengrajin'
 import { KonfirmasiHapusPengrajin, KonfirmasiStatusPengrajin } from './AksiPengrajin'
 import { DialogSelesaiPengerjaan } from './SelesaiPengerjaan'
+import { useOvertimePerPengrajin } from '../../lib/overtime'
 import { aturTampilanPengrajin, tampilanPengrajin, type TampilanPengrajin } from '../../components/animasi/pengaturanAnimasi'
 
 type Saring = 'semua' | 'aktif' | 'nonaktif'
@@ -25,6 +26,8 @@ export function DaftarPengrajin() {
     return (data ?? []) as PengrajinRingkas[]
   }, [versi])
 
+  const overtime = useOvertimePerPengrajin()
+  const ot = (id: string) => overtime.data?.peta.get(id) ?? 0
   const [cari, setCari] = useState('')
   const [saring, setSaring] = useState<Saring>('semua')
   const [form, setForm] = useState<{ buka: boolean; p: PengrajinRingkas | null }>({ buka: false, p: null })
@@ -103,9 +106,13 @@ export function DaftarPengrajin() {
                     <span className={cx('h-2 w-2 shrink-0 rounded-full', p.is_active ? 'bg-ok-600' : 'bg-ink-muted')} title={p.is_active ? 'Aktif' : 'Nonaktif'} />
                   </span>
                   <NamaPengrajin nama={p.name} className="mt-1 block truncate text-sm font-semibold text-navy-900" />
-                  <span className="mt-2 grid grid-cols-2 gap-1 text-center">
+                  <span className="mt-2 grid grid-cols-3 gap-0.5 text-center">
                     <span><span className="block text-sm font-bold tabular-nums text-navy-900">{formatAngka(p.qty_dalam_proses)}</span><span className="block text-[9px] font-semibold text-ink-muted">Proses</span></span>
                     <span><span className="block text-sm font-bold tabular-nums text-ok-600">{formatAngka(p.qty_diserahkan)}</span><span className="block text-[9px] font-semibold text-ink-muted">Serah</span></span>
+                    <span title="Masih dalam proses dan lewat batas hari sejak diterima">
+                      <span className={cx('block text-sm font-bold tabular-nums', ot(p.id) > 0 ? 'text-[#c62828]' : 'text-ink-muted')}>{formatAngka(ot(p.id))}</span>
+                      <span className="block text-[9px] font-bold text-[#c62828]">Overtime</span>
+                    </span>
                   </span>
                 </Link>
                 {p.qty_dalam_proses > 0 && (
@@ -132,7 +139,7 @@ export function DaftarPengrajin() {
                 <Link to={`/pengrajin/${p.id}`} className="mt-3 block rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400">
                   <NamaPengrajin nama={p.name} className="font-display text-2xl font-semibold text-navy-900" />
                 </Link>
-                <dl className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-ice-50 p-3 text-center">
+                <dl className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-ice-50 p-3 text-center">
                   <div>
                     <dt className="text-[11px] font-semibold text-ink-muted">Dalam proses</dt>
                     <dd className="mt-0.5 text-lg font-bold tabular-nums text-navy-900">{formatAngka(p.qty_dalam_proses)}</dd>
@@ -140,6 +147,10 @@ export function DaftarPengrajin() {
                   <div>
                     <dt className="text-[11px] font-semibold text-ink-muted">Diserahkan</dt>
                     <dd className="mt-0.5 text-lg font-bold tabular-nums text-ok-600">{formatAngka(p.qty_diserahkan)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-bold text-[#c62828]">Overtime</dt>
+                    <dd className={cx('mt-0.5 text-lg font-bold tabular-nums', ot(p.id) > 0 ? 'text-[#c62828]' : 'text-ink-muted')}>{formatAngka(ot(p.id))}</dd>
                   </div>
                 </dl>
                 {p.qty_dalam_proses > 0 && (
