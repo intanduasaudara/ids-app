@@ -106,13 +106,14 @@ export function DaftarPengrajin() {
                     <span className={cx('h-2 w-2 shrink-0 rounded-full', p.is_active ? 'bg-ok-600' : 'bg-ink-muted')} title={p.is_active ? 'Aktif' : 'Nonaktif'} />
                   </span>
                   <NamaPengrajin nama={p.name} className="mt-1 block truncate text-sm font-semibold text-navy-900" />
-                  <span className="mt-2 grid grid-cols-3 gap-0.5 text-center">
+                  <span className="mt-2 grid grid-cols-2 gap-1 text-center">
                     <span><span className="block text-sm font-bold tabular-nums text-navy-900">{formatAngka(p.qty_dalam_proses)}</span><span className="block text-[9px] font-semibold text-ink-muted">Proses</span></span>
                     <span><span className="block text-sm font-bold tabular-nums text-ok-600">{formatAngka(p.qty_diserahkan)}</span><span className="block text-[9px] font-semibold text-ink-muted">Serah</span></span>
-                    <span title="Masih dalam proses dan lewat batas hari sejak diterima">
-                      <span className={cx('block text-sm font-bold tabular-nums', ot(p.id) > 0 ? 'text-[#c62828]' : 'text-ink-muted')}>{formatAngka(ot(p.id))}</span>
-                      <span className="block text-[9px] font-bold text-[#c62828]">Overtime</span>
-                    </span>
+                  </span>
+                  <span title="Masih dalam proses dan lewat batas hari sejak diterima"
+                    className={cx('mt-1.5 flex items-center justify-center gap-1 rounded-md py-0.5 text-[10px] font-bold',
+                      ot(p.id) > 0 ? 'bg-[#fdecec] text-[#c62828]' : 'text-[#c62828]/60')}>
+                    <span className="tabular-nums">{formatAngka(ot(p.id))}</span> Overtime
                   </span>
                 </Link>
                 {p.qty_dalam_proses > 0 && (
