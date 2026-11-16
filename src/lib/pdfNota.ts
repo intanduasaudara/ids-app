@@ -319,7 +319,7 @@ function gayaTabel(a5: boolean, sempit: boolean) {
   const f = sempit ? 0.8 : a5 ? 0.88 : 1
   return {
     theme: 'grid' as const,
-    styles: { fontSize: 9.5 * f, cellPadding: sempit ? 1 : 2, textColor: HITAM, lineColor: GARIS, lineWidth: 0.2, valign: 'middle' as const },
+    styles: { fontSize: 9.5 * f, cellPadding: sempit ? 1 : { top: 2.6, bottom: 2.6, left: 2, right: 2 }, minCellHeight: sempit ? 0 : 9, textColor: HITAM, lineColor: GARIS, lineWidth: 0.2, valign: 'middle' as const, halign: 'center' as const, overflow: 'linebreak' as const },
     headStyles: { fillColor: EMAS, textColor: [255, 255, 255] as RGB, fontStyle: 'bold' as const, lineColor: EMAS },
     alternateRowStyles: { fillColor: KRIM },
     footStyles: { fillColor: HITAM, textColor: EMAS_TEKS, fontStyle: 'bold' as const, lineColor: HITAM, cellPadding: sempit ? 1.5 : 2.6 },
@@ -327,14 +327,12 @@ function gayaTabel(a5: boolean, sempit: boolean) {
 }
 
 /**
- * Judul kolom dan baris TOTAL ikut rata seperti angkanya: kolom angka rata kanan sampai ujung,
- * kolom nomor/banyaknya rata tengah. Berlaku untuk kepala, isi, dan kaki tabel.
+ * Semua judul kolom dan isinya rata tengah di kolomnya masing-masing;
+ * hanya baris TOTAL yang rata kanan di bawah.
  */
-function sejajarkan(tengah: number[], kanan: number[]) {
-  return (d: { section: string; column: { index: number }; cell: { colSpan?: number; styles: { halign?: string } } }) => {
-    if (d.section === 'foot' && (d.cell.colSpan ?? 1) > 1) return
-    if (kanan.includes(d.column.index)) d.cell.styles.halign = 'right'
-    else if (tengah.includes(d.column.index)) d.cell.styles.halign = 'center'
+function sejajarkan() {
+  return (d: { section: string; cell: { styles: { halign?: string } } }) => {
+    d.cell.styles.halign = d.section === 'foot' ? 'right' : 'center'
   }
 }
 
@@ -453,12 +451,12 @@ export async function pdfNotaPembayaran(halaman: HalamanPembayaran[], kertas: Ke
       head: [['No', 'Kode OR', 'Kategori + Gender', 'Harga Satuan']],
       body: hal.baris.length
         ? hal.baris.map((b, i) => [String(i + 1), b.kodeOr, b.kategori, b.harga != null ? formatRupiah(b.harga) : ''])
-        : [['', '', 'Tidak ada barang', '']],
+        : [],
       foot: [[{ content: 'TOTAL', colSpan: 3, styles: { halign: 'right' } }, formatRupiah(total)]],
       margin: { left: m, right: m, bottom: sempit ? 4 : W * 0.06 + 8, top: sempit ? 4 : W * 0.06 + 8 },
       ...gaya,
-      columnStyles: { 0: { cellWidth: sempit ? 6 : W * 0.07, halign: 'center' }, 3: { halign: 'right', cellWidth: sempit ? 18 : W * 0.26 } },
-      didParseCell: sejajarkan([0], [3]),
+      columnStyles: { 0: { cellWidth: sempit ? 6 : W * 0.08 }, 1: { cellWidth: sempit ? 11 : W * 0.17 }, 3: { cellWidth: sempit ? 18 : W * 0.26 } },
+      didParseCell: sejajarkan(),
       didDrawPage: sempit ? undefined : (d: { pageNumber: number }) => { if (d.pageNumber > 1) hiasanHalaman(doc, aset) },
     })
 
@@ -531,12 +529,12 @@ export async function pdfNotaManual(n: NotaManualPdf, kertas: 'A4' | 'A5', namaB
     head: [['Banyaknya', 'Nama Barang', 'Harga', 'Jumlah']],
     body: n.baris.length
       ? n.baris.map((b) => [b.banyak ? b.banyak.toLocaleString('id-ID') : '', b.nama, b.harga ? formatRupiah(b.harga) : '', b.jumlah ? formatRupiah(b.jumlah) : ''])
-      : [['', '', '', '']],
+      : [],
     foot: [[{ content: 'TOTAL', colSpan: 3, styles: { halign: 'right' } }, formatRupiah(n.total)]],
     margin: { left: m, right: m, bottom: W * 0.06 + 8, top: W * 0.06 + 8 },
     ...gayaTabel(a5, false),
-    columnStyles: { 0: { cellWidth: W * 0.15, halign: 'center' }, 2: { halign: 'right', cellWidth: W * 0.2 }, 3: { halign: 'right', cellWidth: W * 0.2 } },
-    didParseCell: sejajarkan([0], [2, 3]),
+    columnStyles: { 0: { cellWidth: W * 0.15 }, 2: { cellWidth: W * 0.22 }, 3: { cellWidth: W * 0.22 } },
+    didParseCell: sejajarkan(),
     didDrawPage: (d: { pageNumber: number }) => { if (d.pageNumber > 1) hiasanHalaman(doc, aset) },
   })
   kaki(doc, aset, n, akhirTabel(doc))

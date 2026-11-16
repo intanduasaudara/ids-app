@@ -193,7 +193,7 @@ export default function EditorNota() {
         >
           <table className="tabel-nota">
             <colgroup>
-              <col className="w-[14%]" /><col /><col className="w-[25%]" /><col className="w-[27%]" /><col className="w-[6%] print:hidden" />
+              <col className="w-[15%]" /><col /><col className="w-[25%]" /><col className="w-[25%]" /><col className="w-[6%] print:hidden" />
             </colgroup>
             <thead>
               <tr>
@@ -206,7 +206,7 @@ export default function EditorNota() {
             </thead>
             <tbody>
               {baris.map((b, i) => (
-                <tr key={i}>
+                <tr key={i} className={b.nama.trim() || b.banyak.trim() || b.harga.trim() ? undefined : 'print:hidden'}>
                   <td>
                     <input inputMode="decimal" aria-label={`Banyaknya baris ${i + 1}`} value={b.banyak}
                       onChange={(e) => ubah(i, 'banyak', e.target.value.replace(/[^\d,.]/g, ''))}

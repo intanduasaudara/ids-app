@@ -54,3 +54,25 @@ export function useOvertimePerPengrajin() {
     return { peta, total: (data ?? []).length }
   }, [batas, versi])
 }
+
+/** Barang overtime dikelompokkan per order: Map order_id → { jumlah barang, hari terlama lewat batas }. */
+export function useOvertimePerOrder() {
+  const aturan = useAturanOvertime()
+  const versi = useVersiData(['order_items', 'orders', 'app_settings'])
+  return useMuat(async () => {
+    const { data, error } = await db()
+      .from('v_items')
+      .select('order_id, assigned_date, status')
+      .eq('status', 'dalam_proses')
+      .eq('is_active', true)
+      .lte('assigned_date', aturan.batas)
+      .limit(5000)
+    if (error) throw error
+    const peta = new Map<string, { jumlah: number; lewat: number }>()
+    for (const r of (data ?? []) as { order_id: string; assigned_date: string; status: string }[]) {
+      const lama = peta.get(r.order_id) ?? { jumlah: 0, lewat: 0 }
+      peta.set(r.order_id, { jumlah: lama.jumlah + 1, lewat: Math.max(lama.lewat, aturan.lewat(r.status, r.assigned_date)) })
+    }
+    return { peta, barang: (data ?? []).length }
+  }, [aturan.batas, versi])
+}

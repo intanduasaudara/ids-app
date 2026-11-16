@@ -406,9 +406,14 @@ html[data-tema='emas-terbalik'] .kode-ids { color: #FFFFFF; background: #8E6C27;
   background: #8E6C27; color: #fff; font-weight: 600; letter-spacing: 0.02em;
   padding: 0.55em 0.5em; border: 1px solid #8E6C27;
 }
-.tabel-nota td { padding: 0.45em 0.5em; border: 1px solid #dccdab; vertical-align: middle; overflow-wrap: anywhere; }
+.tabel-nota td { padding: 0.55em 0.5em; border: 1px solid #dccdab; vertical-align: middle; overflow-wrap: anywhere; }
 .tabel-nota th { overflow-wrap: anywhere; line-height: 1.2; }
 .tabel-nota td.text-right, .tabel-nota tfoot td { white-space: nowrap; overflow-wrap: normal; }
+/* Semua judul kolom dan isinya rata tengah; hanya baris TOTAL rata kanan. */
+.tabel-nota th, .tabel-nota tbody td, .tabel-nota tbody td input { text-align: center; }
+.tabel-nota tbody td { white-space: normal; height: 2.6em; }
+.tabel-nota tbody td:has(> input) { white-space: nowrap; }
+.tabel-nota tfoot td { text-align: right; }
 @media (max-width: 640px) {
   .tabel-nota th { padding: 0.5em 0.3em; font-size: 0.88em; }
   .tabel-nota td, .tabel-nota tfoot td { padding: 0.4em 0.3em; }

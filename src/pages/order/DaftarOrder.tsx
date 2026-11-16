@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Plus, Search, Trash2 } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, ChevronRight, Plus, Search, Trash2 } from 'lucide-react'
 import { db } from '../../lib/supabase'
 import type { OrderRingkas, StatusOrder } from '../../lib/types'
 import { LABEL_STATUS_ORDER, statusOrderTampil } from '../../lib/types'
@@ -8,13 +8,14 @@ import { formatAngka, formatTanggal } from '../../lib/format'
 import { normalisasiWa } from '../../lib/wa'
 import { useMuat } from '../../sync/useMuat'
 import { useVersiData } from '../../sync/SyncProvider'
+import { useAturanOvertime, useOvertimePerOrder } from '../../lib/overtime'
 import { Konfirmasi } from '../../components/ui/Dialog'
 import { useNotifikasi } from '../../components/ui/Notifikasi'
 import { Isian, Kartu, KepalaHalaman, Kosong, KotakGalat, Pemuat, Tombol, cx } from '../../components/ui/ui'
 
 const PER_HALAMAN = 20
-type Saring = 'semua' | Exclude<StatusOrder, 'kosong'>
-const SARINGAN: Saring[] = ['semua', 'dalam_proses', 'diserahkan', 'dibatalkan']
+type Saring = 'semua' | Exclude<StatusOrder, 'kosong'> | 'overtime'
+const SARINGAN: Saring[] = ['semua', 'dalam_proses', 'overtime', 'diserahkan', 'dibatalkan']
 
 const GAYA: Record<StatusOrder, string> = {
   dalam_proses: 'bg-ice-100 text-navy-800 ring-ice-300',
@@ -46,6 +47,9 @@ export function DaftarOrder() {
   const [halaman, setHalaman] = useState(0)
   const [hapusBatal, setHapusBatal] = useState(false)
   const { beri } = useNotifikasi()
+  const aturanOT = useAturanOvertime()
+  const ot = useOvertimePerOrder()
+  const idOvertime = ot.data ? [...ot.data.peta.keys()] : null
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -61,7 +65,10 @@ export function DaftarOrder() {
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(halaman * PER_HALAMAN, halaman * PER_HALAMAN + PER_HALAMAN - 1)
-    if (saring === 'dalam_proses') q = q.in('order_status', ['dalam_proses', 'sebagian', 'selesai'])
+    if (saring === 'overtime') {
+      if (!idOvertime || idOvertime.length === 0) return { baris: [] as OrderRingkas[], total: 0 }
+      q = q.in('id', idOvertime)
+    } else if (saring === 'dalam_proses') q = q.in('order_status', ['dalam_proses', 'sebagian', 'selesai'])
     else if (saring !== 'semua') q = q.eq('order_status', saring)
     if (cariAktif) {
       const s = `"%${cariAktif}%"`
@@ -73,7 +80,7 @@ export function DaftarOrder() {
     const { data, error, count } = await q
     if (error) throw error
     return { baris: (data ?? []) as OrderRingkas[], total: count ?? 0 }
-  }, [versi, halaman, saring, cariAktif])
+  }, [versi, halaman, saring, cariAktif, saring === 'overtime' ? idOvertime?.join(',') : ''])
 
   const total = data?.total ?? 0
   const jumlahHalaman = Math.max(1, Math.ceil(total / PER_HALAMAN))
@@ -101,15 +108,28 @@ export function DaftarOrder() {
               onClick={() => { setSaring(s); setHalaman(0) }}
               className={cx(
                 'shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold',
-                saring === s ? 'border-navy-900 bg-navy-900 text-white' : 'border-ice-300 bg-white text-ink-soft hover:border-navy-700',
+                s === 'overtime'
+                  ? (saring === s ? 'border-[#c62828] bg-[#c62828] text-white' : 'border-[#c62828]/50 bg-white text-[#c62828] hover:border-[#c62828]')
+                  : saring === s ? 'border-navy-900 bg-navy-900 text-white' : 'border-ice-300 bg-white text-ink-soft hover:border-navy-700',
               )}
             >
-              {s === 'semua' ? 'Semua' : LABEL_STATUS_ORDER[s]}
+              {s === 'semua' ? 'Semua' : s === 'overtime' ? `Overtime${ot.data ? ` (${formatAngka(ot.data.peta.size)})` : ''}` : LABEL_STATUS_ORDER[s]}
             </button>
           ))}
         </div>
       </div>
 
+      {ot.data && ot.data.barang > 0 && saring !== 'overtime' && (
+        <button type="button" onClick={() => { setSaring('overtime'); setHalaman(0) }}
+          className="mb-4 flex w-full items-center gap-3 rounded-xl2 border border-[#c62828]/30 bg-[#fdecec] px-4 py-3 text-left text-sm text-[#c62828] transition hover:border-[#c62828]/60">
+          <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden />
+          <span className="flex-1">
+            <strong>{formatAngka(ot.data.barang)} barang OVERTIME</strong> di {formatAngka(ot.data.peta.size)} order
+            <span className="block text-xs opacity-80">Masih dalam proses lebih dari {aturanOT.hariBatas} hari sejak diterima pengrajin. Ketuk untuk melihat.</span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
+        </button>
+      )}
       {saring === 'dibatalkan' && data && data.baris.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl2 border border-bad-600/15 bg-bad-50/60 px-4 py-3 text-sm text-bad-700">
           <span className="flex-1">Order yang dibatalkan bisa dihapus supaya daftar bersih. Yang terhapus masuk Sampah dan bisa dipulihkan selama 7 hari.</span>
@@ -151,7 +171,10 @@ export function DaftarOrder() {
                     <td className="max-w-[160px] truncate px-4 py-3 text-ink-soft">{o.category_names ?? '-'}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{o.quantity}</td>
                     <td className="px-4 py-3 tabular-nums">{formatTanggal(o.order_date)}</td>
-                    <td className="px-4 py-3"><LencanaOrder status={o.order_status} /></td>
+                    <td className="px-4 py-3">
+                      <LencanaOrder status={o.order_status} />
+                      {ot.data?.peta.get(o.id) && <LabelOvertimeOrder {...ot.data.peta.get(o.id)!} />}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -168,7 +191,10 @@ export function DaftarOrder() {
                         <p className="font-semibold text-navy-900">Order {o.order_number}</p>
                         {o.customer_name && <p className="truncate text-sm text-ink-soft">{o.customer_name}</p>}
                       </div>
-                      <LencanaOrder status={o.order_status} />
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <LencanaOrder status={o.order_status} />
+                        {ot.data?.peta.get(o.id) && <LabelOvertimeOrder {...ot.data.peta.get(o.id)!} />}
+                      </div>
                     </div>
                     <p className="mt-2 text-xs text-ink-soft">
                       {o.quantity} barang · {o.category_names ?? '-'} · {o.craftsman_codes ?? '-'}
@@ -211,5 +237,14 @@ export function DaftarOrder() {
         }}
       />
     </>
+  )
+}
+
+/** Label merah di kartu order yang punya barang overtime. */
+function LabelOvertimeOrder({ jumlah, lewat }: { jumlah: number; lewat: number }) {
+  return (
+    <span className="mt-1 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#c62828]/40 bg-[#fdecec] px-2 py-0.5 text-[10px] font-bold tracking-wide text-[#c62828]">
+      OVERTIME · lewat {lewat} hari{jumlah > 1 ? ` · ${jumlah} barang` : ''}
+    </span>
   )
 }
