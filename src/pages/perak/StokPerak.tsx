@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Printer } from 'lucide-react'
+import { Plus, Printer, Trash2 } from 'lucide-react'
 import { formatBulan, formatGram, formatTanggalHari, hariIni } from '../../lib/format'
 import { useMuat } from '../../sync/useMuat'
 import { useSinkron, useVersiData } from '../../sync/SyncProvider'
 import { useMaster } from '../../sync/useMaster'
 import { Kartu, KepalaHalaman, KotakGalat, Pemuat, Tombol, cx } from '../../components/ui/ui'
 import { DialogBeliPerak } from './DialogBeliPerak'
+import { Konfirmasi } from '../../components/ui/Dialog'
+import { useNotifikasi } from '../../components/ui/Notifikasi'
+import { db } from '../../lib/supabase'
 import { awalBulanDari, muatLaporanPerak, muatRiwayatPerak, type BarisPerak } from './perak'
 
 /** Angka gram berwarna: sisa minus tampil merah (pemakaian lebih banyak dari pembelian). */
@@ -21,6 +24,8 @@ export default function StokPerak() {
   const [bulan, setBulan] = useState(() => hariIni(zona).slice(0, 7))
   const [beli, setBeli] = useState(false)
   const [beliUntuk, setBeliUntuk] = useState<BarisPerak | null>(null)
+  const [hapus, setHapus] = useState<{ id: string; gram: number; tanggal: string; kode: string } | null>(null)
+  const { beri } = useNotifikasi()
 
   const data = useMuat(() => muatLaporanPerak(bulan), [bulan, versi])
   const riwayat = useMuat(() => muatRiwayatPerak(bulan), [bulan, versi])
@@ -149,6 +154,11 @@ export default function StokPerak() {
                     {b.notes && <span className="block truncate text-xs text-ink-muted">{b.notes}</span>}
                   </span>
                   <span className="font-semibold tabular-nums text-navy-900">+{formatGram(b.gram)}</span>
+                  <button type="button" title="Hapus pembelian ini" aria-label={`Hapus pembelian ${b.craftsman_code} ${formatTanggalHari(b.tanggal)}`}
+                    onClick={() => setHapus({ id: b.id, gram: b.gram, tanggal: b.tanggal, kode: b.craftsman_code })}
+                    className="inline-flex h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-ink-muted hover:bg-bad-50 hover:text-bad-700">
+                    <Trash2 className="h-4 w-4" aria-hidden /> Hapus
+                  </button>
                 </li>
               ))}
             </ul>
@@ -159,6 +169,20 @@ export default function StokPerak() {
         )}
       </section>
 
+      <Konfirmasi
+        terbuka={hapus !== null}
+        tutup={() => setHapus(null)}
+        judul="Hapus pembelian perak?"
+        pesan={<p>Pembelian {hapus ? formatGram(hapus.gram) : ''} untuk {hapus?.kode} tanggal {hapus ? formatTanggalHari(hapus.tanggal) : ''} pindah ke <strong className="text-navy-900">Sampah</strong> dan stok dihitung ulang. Bisa dipulihkan selama 7 hari.</p>}
+        labelYa="Pindahkan ke Sampah"
+        bahaya
+        jalankan={async () => {
+          if (!hapus) return
+          const { error } = await db().rpc('hapus_pembelian_perak', { p_id: hapus.id })
+          if (error) throw error
+          beri('Pembelian dipindah ke Sampah.')
+        }}
+      />
       <DialogBeliPerak terbuka={beli} tutup={() => setBeli(false)} daftar={master.data?.pengrajin ?? []} />
       <DialogBeliPerak terbuka={beliUntuk !== null} tutup={() => setBeliUntuk(null)}
         pengrajin={beliUntuk ? { id: beliUntuk.craftsman_id, code: beliUntuk.code, name: beliUntuk.name } : null} />

@@ -73,8 +73,11 @@ export function PerakPengrajin({ pengrajin }: { pengrajin: Pick<Pengrajin, 'id' 
                         {b.notes && <span className="block truncate text-xs text-ink-muted">{b.notes}</span>}
                       </span>
                       <span className="font-semibold tabular-nums text-navy-900">+{formatGram(b.gram)}</span>
-                      <button type="button" aria-label={`Hapus pembelian ${formatTanggalHari(b.tanggal)}`} onClick={() => setHapus(b)}
-                        className="rounded-lg p-1.5 text-ink-muted hover:bg-bad-50 hover:text-bad-700"><Trash2 className="h-4 w-4" /></button>
+                      <button type="button" aria-label={`Hapus pembelian ${formatTanggalHari(b.tanggal)}`} title="Hapus pembelian ini"
+                        onClick={(e) => { e.stopPropagation(); setHapus(b) }}
+                        className="inline-flex h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-ink-muted hover:bg-bad-50 hover:text-bad-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad-600/40">
+                        <Trash2 className="h-4 w-4" aria-hidden /> Hapus
+                      </button>
                     </li>
                   ))}
                 </ul>

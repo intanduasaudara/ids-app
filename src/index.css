@@ -311,9 +311,17 @@ html[data-tema='emas-terbalik'] .menu-cair::before {
 
 /* Semua kartu: kartu besar (berisi tabel atau isian) bergerak lebih halus supaya tetap nyaman dibaca. */
 @media (hover: hover) and (pointer: fine) {
-  .kartu-pantul:has(table, form, input, textarea, select):hover { transform: translateY(-3px) scale(1.004); }
+  .kartu-pantul:has(table, form, input, textarea, select, button, a):hover { transform: translateY(-3px) scale(1.004); }
+  /* Saat mouse ditekan, kartu tetap di posisi hover (tidak turun), supaya tombol di dalamnya tidak bergeser dari kursor. */
+  .kartu-pantul:hover:active { transform: translateY(-8px) scale(1.01); }
 }
-.kartu-pantul:has(table, form, input, textarea, select):active { transform: none; }
+/* Kartu yang berisi tombol, tautan, atau isian tidak ikut mengecil saat ditekan: kalau kartunya
+   bergeser di antara tekan dan lepas, klik pada tombol di dalamnya (misalnya Hapus) tidak terhitung. */
+.kartu-pantul:has(table, form, input, textarea, select, button, a):active,
+.kartu-pantul:has(table, form, input, textarea, select, button, a):hover:active { transform: none; }
+@media (hover: hover) and (pointer: fine) {
+  .kartu-pantul:has(table, form, input, textarea, select, button, a):hover:active { transform: translateY(-3px) scale(1.004); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .menu-cair::before { transition: none; animation: none; }
