@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Download, Printer } from 'lucide-react'
-import { pdfKartuOrder } from '../lib/pdfNota'
+import { ArrowLeft, Download, Image as IkonGambar, Printer } from 'lucide-react'
+import { gambarKartuOrder, pdfKartuOrder, type KartuOrderPdf } from '../lib/pdfNota'
 import { pesanGalat } from '../lib/errors'
 import { db } from '../lib/supabase'
 import type { Barang } from '../lib/types'
@@ -27,7 +27,7 @@ export default function KartuOrder() {
   const { hariBatas } = useAturanOvertime()
   const { beri } = useNotifikasi()
   const identitas = useIdentitasNota()
-  const [membuatPdf, setMembuatPdf] = useState(false)
+  const [membuat, setMembuat] = useState<'pdf' | 'gambar' | null>(null)
 
   const data = useMuat(async () => {
     const { data: b, error } = await db().from('v_items').select('*').eq('id', id).maybeSingle()
@@ -64,17 +64,20 @@ export default function KartuOrder() {
   ]
   const urlFoto = b.product_code ? alamatFoto(b.product_photo_static, b.product_photo_path, foto) : null
 
-  const simpanPdfKartu = async () => {
-    setMembuatPdf(true)
+  const isiKartu: KartuOrderPdf = {
+    nomor: b.order_number, baris, tipe: b.product_code ? `${tipe} · ${b.product_code}` : tipe, fotoUrl: urlFoto,
+    jabatan: identitas.jabatan, tandaTanganUrl: identitas.tampilTtd ? identitas.ttd : null, tampilTtd: identitas.tampilTtd,
+  }
+  const nama = `Form-Orderan-Berlian-${b.order_number}${b.item_no > 1 ? `-${b.item_no}` : ''}`
+  const buat = async (jenis: 'pdf' | 'gambar') => {
+    setMembuat(jenis)
     try {
-      await pdfKartuOrder({
-        nomor: b.order_number, baris, tipe: b.product_code ? `${tipe} · ${b.product_code}` : tipe, fotoUrl: urlFoto,
-        jabatan: identitas.jabatan, tandaTanganUrl: identitas.tampilTtd ? identitas.ttd : null, tampilTtd: identitas.tampilTtd,
-      }, `Kartu-Order-${b.order_number}-${b.item_no}.pdf`)
+      if (jenis === 'pdf') await pdfKartuOrder(isiKartu, `${nama}.pdf`)
+      else await gambarKartuOrder(isiKartu, `${nama}.jpg`)
     } catch (e) {
       beri(pesanGalat(e), 'galat')
     } finally {
-      setMembuatPdf(false)
+      setMembuat(null)
     }
   }
 
@@ -83,9 +86,13 @@ export default function KartuOrder() {
       <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-ice-200 bg-white px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] print:hidden">
         <Link to={`/order/${b.order_id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-soft"><ArrowLeft className="h-4 w-4" /> Kembali</Link>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <button type="button" disabled={membuatPdf} onClick={() => void simpanPdfKartu()}
+          <button type="button" disabled={!!membuat} onClick={() => void buat('gambar')}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-gold-300 bg-white px-4 text-sm font-semibold text-navy-900 hover:bg-gold-50 disabled:opacity-60">
-            <Download className="h-4 w-4" /> {membuatPdf ? 'Membuat PDF…' : 'Simpan PDF'}
+            <IkonGambar className="h-4 w-4" /> {membuat === 'gambar' ? 'Membuat…' : 'Kirim gambar'}
+          </button>
+          <button type="button" disabled={!!membuat} onClick={() => void buat('pdf')}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-gold-300 bg-white px-4 text-sm font-semibold text-navy-900 hover:bg-gold-50 disabled:opacity-60">
+            <Download className="h-4 w-4" /> {membuat === 'pdf' ? 'Membuat PDF…' : 'Simpan PDF'}
           </button>
           <button type="button" onClick={() => window.print()} className="inline-flex h-10 items-center gap-2 rounded-xl bg-navy-900 px-4 text-sm font-semibold text-white">
             <Printer className="h-4 w-4" /> Cetak
@@ -93,7 +100,7 @@ export default function KartuOrder() {
         </div>
         <p className="w-full text-xs text-ink-muted">
           Ukuran kartu KTP tegak (5,4 × 8,5 cm). Saat Cetak, pilih ukuran kertas kartu / 54 × 86 mm di pengaturan printer.
-          Ring size yang belum diisi tidak ditampilkan; isi lewat tombol Ubah di detail order.
+          Untuk WhatsApp pakai <b>Kirim gambar</b>: kartunya langsung terlihat di chat. Ring size yang belum diisi tidak ditampilkan.
         </p>
       </div>
 
@@ -129,7 +136,7 @@ function KertasKartu({ nomor, baris, tipe, kode, foto, ttd, tampilTtd, jabatan }
       </div>
 
       <div className="relative flex flex-1 flex-col">
-        <img src={`${import.meta.env.BASE_URL}logo-ids-tegak.png`} alt="CV. Intan Dua Saudara" draggable={false} className="mx-auto h-[12mm] w-auto object-contain" />
+        <img src={`${import.meta.env.BASE_URL}logo-ids-tegak.png`} alt="CV. Intan Dua Saudara" draggable={false} className="mx-auto h-[11mm] w-auto object-contain" />
         <p className="mt-[1.4mm] text-center text-[6.2pt] font-bold tracking-[0.16em] text-[#8E6C27]">FORM ORDERAN BERLIAN</p>
         <p className="text-center text-[7pt] font-bold tracking-wide">No. {nomor}</p>
         <div className="my-[1.2mm] flex items-center gap-[1mm]" aria-hidden>
@@ -139,7 +146,7 @@ function KertasKartu({ nomor, baris, tipe, kode, foto, ttd, tampilTtd, jabatan }
         </div>
         <dl>
           {baris.map(([l, v, merah]) => (
-            <div key={l} className="grid grid-cols-[17mm_1.6mm_1fr] border-b border-dotted border-[#dccdab] py-[0.7mm] last:border-0">
+            <div key={l} className="grid grid-cols-[16.4mm_1.7mm_1fr] border-b border-dotted border-[#dccdab] py-[0.6mm] last:border-0">
               <dt className="text-[#5a4c33]">{l}</dt><span className="text-[#5a4c33]">:</span>
               <dd className={cx('min-w-0 break-words font-bold', merah && 'text-[#c62828]')}>{v}</dd>
             </div>
@@ -148,7 +155,7 @@ function KertasKartu({ nomor, baris, tipe, kode, foto, ttd, tampilTtd, jabatan }
         {kode && (
           <div className="mt-[1.8mm] flex flex-col items-center">
             <span className="max-w-full truncate rounded-full bg-[#1f1a12] px-[2.6mm] py-[0.5mm] text-[5.4pt] font-bold tracking-wide text-[#e6c98a]">{tipe}</span>
-            <FotoCincin src={foto} kode={kode} className="mt-[1.2mm] h-[17mm] w-[17mm] rounded-[1.6mm] border-[#e6d7b3] bg-white" />
+            <FotoCincin src={foto} kode={kode} className="mt-[1.2mm] h-[14mm] w-[14mm] rounded-[1.6mm] border-[#e6d7b3] bg-white" />
           </div>
         )}
         {tampilTtd && (

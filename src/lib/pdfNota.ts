@@ -739,130 +739,237 @@ export interface KartuOrderPdf {
 /** Ukuran kartu KTP tegak: 54 × 85,6 mm. */
 export const UKURAN_KARTU: [number, number] = [54, 85.6]
 
-/** FORM ORDERAN BERLIAN satu barang, ukuran kartu KTP tegak: logo, logo samar di latar, gambar produk, tanda tangan. */
-export async function pdfKartuOrder(k: KartuOrderPdf, namaBerkas: string): Promise<void> {
-  const { jsPDF } = await pustaka()
+/* Satu gambar kartu dipakai untuk dua keluaran: PDF (jsPDF) dan gambar JPG (canvas).
+ * Semua ukuran dalam milimeter; huruf dalam point. */
+interface GayaTeks { ukuran: number; tebal?: boolean; serif?: boolean; warna?: RGB; tengah?: boolean; jarak?: number }
+interface Pena {
+  teks(t: string, x: number, y: number, g: GayaTeks): void
+  lebar(t: string, g: GayaTeks): number
+  garis(x1: number, y1: number, x2: number, y2: number, warna: RGB, tebal: number, putus?: boolean): void
+  kotak(x: number, y: number, w: number, h: number, r: number, o: { isi?: RGB; garis?: RGB; tebal?: number }): void
+  gambar(g: Gambar, x: number, y: number, w: number, h: number): void
+  poligon(titik: [number, number][], warna: RGB): void
+}
+
+const PT = 0.3528 // 1 point dalam mm
+
+/** Potong teks menjadi beberapa baris agar muat di lebar tertentu. */
+function potong(p: Pena, t: string, lebar: number, g: GayaTeks): string[] {
+  const kata = t.split(/\s+/).filter(Boolean)
+  const baris: string[] = []
+  let kini = ''
+  for (const k of kata) {
+    const coba = kini ? `${kini} ${k}` : k
+    if (kini && p.lebar(coba, g) > lebar) { baris.push(kini); kini = k } else kini = coba
+  }
+  if (kini) baris.push(kini)
+  return baris.length ? baris : ['-']
+}
+
+/** Teks berjarak antarhuruf (digambar huruf per huruf supaya sama di PDF dan gambar). */
+function teksBerjarak(p: Pena, t: string, x: number, y: number, g: GayaTeks) {
+  const jarak = g.jarak ?? 0
+  const total = [...t].reduce((a, c) => a + p.lebar(c, { ...g, jarak: 0 }), 0) + jarak * (t.length - 1)
+  let xx = g.tengah ? x - total / 2 : x
+  for (const c of t) {
+    p.teks(c, xx, y, { ...g, tengah: false, jarak: 0 })
+    xx += p.lebar(c, { ...g, jarak: 0 }) + jarak
+  }
+}
+
+interface AsetKartu { tegak: Gambar | null; tanda: Gambar | null; foto: Gambar | null; ttd: Gambar | null }
+
+async function siapkanAsetKartu(k: KartuOrderPdf): Promise<AsetKartu> {
   const [tegak, tanda, foto, ttd] = await Promise.all([
     logoTegak(),
-    tandaLogo(),
-    k.fotoUrl ? gambarKecil(k.fotoUrl, 400) : Promise.resolve(null),
-    k.tampilTtd && k.tandaTanganUrl ? muatGambar(k.tandaTanganUrl, 500) : Promise.resolve(null),
+    tandaLogo().then((g) => (g ? pudarkan(g, 0.07) : null)),
+    k.fotoUrl ? gambarKecil(k.fotoUrl, 500) : Promise.resolve(null),
+    k.tampilTtd && k.tandaTanganUrl ? muatGambar(k.tandaTanganUrl, 600) : Promise.resolve(null),
   ])
+  return { tegak, tanda, foto, ttd }
+}
+
+/** Logo samar: dibuat pudar di gambar itu sendiri (tanpa efek transparansi PDF) supaya aman di semua penampil & pratinjau WhatsApp. */
+async function pudarkan(g: Gambar, alfa: number): Promise<Gambar | null> {
+  try {
+    const im = await new Promise<HTMLImageElement>((ok, gagal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = gagal; i.src = g.data })
+    const c = document.createElement('canvas')
+    c.width = g.w
+    c.height = g.h
+    const x = c.getContext('2d')
+    if (!x) return null
+    x.globalAlpha = alfa
+    x.drawImage(im, 0, 0)
+    return { data: c.toDataURL('image/png'), w: g.w, h: g.h }
+  } catch {
+    return null
+  }
+}
+
+function gambarKartu(p: Pena, k: KartuOrderPdf, a: AsetKartu) {
   const [W, H] = UKURAN_KARTU
-  const doc: Doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'portrait' })
   const mx = 3.6
   const tengah = W / 2
 
-  // Bingkai emas ganda
-  doc.setDrawColor(...EMAS)
-  doc.setLineWidth(0.3)
-  doc.roundedRect(1.2, 1.2, W - 2.4, H - 2.4, 1.6, 1.6, 'S')
-  doc.setDrawColor(...EMAS_MUDA)
-  doc.setLineWidth(0.1)
-  doc.roundedRect(1.9, 1.9, W - 3.8, H - 3.8, 1.1, 1.1, 'S')
-
-  // Logo samar di latar
-  if (tanda) {
-    doc.saveGraphicsState()
-    doc.setGState(new doc.GState({ opacity: 0.06 }))
+  // Latar putih, logo samar, lalu bingkai emas ganda
+  p.kotak(0, 0, W, H, 0, { isi: [255, 255, 255] })
+  if (a.tanda) {
     const tw = 40
-    const th = (tw * tanda.h) / tanda.w
-    doc.addImage(tanda.data, 'PNG', tengah - tw / 2, H * 0.46 - th / 2, tw, th, 'tanda-kartu', 'FAST')
-    doc.restoreGraphicsState()
+    const th = (tw * a.tanda.h) / a.tanda.w
+    p.gambar(a.tanda, tengah - tw / 2, H * 0.47 - th / 2, tw, th)
   }
+  p.kotak(1.2, 1.2, W - 2.4, H - 2.4, 1.6, { garis: EMAS, tebal: 0.3 })
+  p.kotak(1.9, 1.9, W - 3.8, H - 3.8, 1.1, { garis: EMAS_MUDA, tebal: 0.1 })
 
-  let y = 3.2
-  if (tegak) {
-    const lh = 12
-    const lw = (lh * tegak.w) / tegak.h
-    doc.addImage(tegak.data, 'PNG', tengah - lw / 2, y, lw, lh, undefined, 'FAST')
-    y += lh + 3.4
+  let y = 3.4
+  if (a.tegak) {
+    const lh = 11
+    const lw = (lh * a.tegak.w) / a.tegak.h
+    p.gambar(a.tegak, tengah - lw / 2, y, lw, lh)
+    y += lh + 3.3
   }
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(6.2)
-  doc.setTextColor(...EMAS)
-  doc.text('FORM ORDERAN BERLIAN', tengah, y, { align: 'center', charSpace: 0.35 })
-  y += 2.9
-  doc.setFontSize(7)
-  doc.setTextColor(...HITAM)
-  doc.text(`No. ${k.nomor}`, tengah, y, { align: 'center' })
-  y += 2.2
-  // Ornamen garis + belah ketupat
-  doc.setDrawColor(...EMAS)
-  doc.setLineWidth(0.2)
-  doc.line(mx + 4, y, tengah - 1.6, y)
-  doc.line(tengah + 1.6, y, W - mx - 4, y)
-  poligon(doc, [[tengah, y - 0.9], [tengah + 0.9, y], [tengah, y + 0.9], [tengah - 0.9, y]], EMAS)
-  y += 1.6
+  teksBerjarak(p, 'FORM ORDERAN BERLIAN', tengah, y, { ukuran: 6, tebal: true, warna: EMAS, tengah: true, jarak: 0.42 })
+  y += 3.1
+  p.teks(`No. ${k.nomor}`, tengah, y, { ukuran: 7.2, tebal: true, warna: HITAM, tengah: true })
+  y += 2.4
+  p.garis(mx + 4, y, tengah - 1.8, y, EMAS, 0.2)
+  p.garis(tengah + 1.8, y, W - mx - 4, y, EMAS, 0.2)
+  p.poligon([[tengah, y - 0.9], [tengah + 0.9, y], [tengah, y + 0.9], [tengah - 0.9, y]], EMAS)
+  y += 1.4
 
-  const xTitik = mx + 17
-  const xIsi = xTitik + 1.6
+  // Baris data: label boleh dua baris supaya tidak menabrak isinya
+  const lebarLabel = 15.6
+  const xTitik = mx + 16.4
+  const xIsi = xTitik + 1.7
   const lebarIsi = W - mx - xIsi
+  const gLabel: GayaTeks = { ukuran: 5.3, warna: ABU }
+  const tinggiBaris = 2.15
   k.baris.forEach(([label, isi, merah], i) => {
-    doc.setFontSize(5.4)
-    doc.setFont('helvetica', 'bold')
-    const baris = doc.splitTextToSize(isi || '-', lebarIsi) as string[]
-    const yTeks = y + 2.4
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(...ABU)
-    doc.text(label, mx, yTeks)
-    doc.text(':', xTitik, yTeks)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(...(merah ? MERAH : HITAM))
-    baris.forEach((b, j) => doc.text(b, xIsi, yTeks + j * 2.2))
-    y += Math.max(1, baris.length) * 2.2 + 1.3
-    if (i < k.baris.length - 1) {
-      doc.setDrawColor(...GARIS)
-      doc.setLineWidth(0.12)
-      doc.setLineDashPattern([0.35, 0.35], 0)
-      doc.line(mx, y, W - mx, y)
-      doc.setLineDashPattern([], 0)
-    }
+    const gIsi: GayaTeks = { ukuran: 5.5, tebal: true, warna: merah ? MERAH : HITAM }
+    const bl = potong(p, label, lebarLabel, gLabel)
+    const bi = potong(p, isi || '-', lebarIsi, gIsi)
+    const yTeks = y + 2.6
+    bl.forEach((t, j) => p.teks(t, mx, yTeks + j * tinggiBaris, gLabel))
+    p.teks(':', xTitik, yTeks, gLabel)
+    bi.forEach((t, j) => p.teks(t, xIsi, yTeks + j * tinggiBaris, gIsi))
+    y += Math.max(bl.length, bi.length) * tinggiBaris + 1.5
+    if (i < k.baris.length - 1) p.garis(mx, y, W - mx, y, GARIS, 0.12, true)
   })
-  doc.setTextColor(...HITAM)
 
-  if (foto) {
-    y += 2.4
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(5.4)
-    const lp = Math.min(W - 2 * mx, doc.getTextWidth(k.tipe) + 5.2)
-    doc.setFillColor(...HITAM)
-    doc.roundedRect(tengah - lp / 2, y, lp, 3.2, 1.6, 1.6, 'F')
-    doc.setTextColor(...EMAS_TEKS)
-    doc.text(k.tipe, tengah, y + 2.25, { align: 'center', maxWidth: W - 2 * mx - 4 })
-    doc.setTextColor(...HITAM)
-    y += 4.4
-    const sisi = 17
-    doc.setDrawColor(230, 215, 179)
-    doc.setLineWidth(0.2)
-    doc.setFillColor(255, 255, 255)
-    doc.roundedRect(tengah - sisi / 2, y, sisi, sisi, 1.6, 1.6, 'FD')
-    const s = Math.min((sisi - 1.4) / foto.w, (sisi - 1.4) / foto.h)
-    doc.addImage(foto.data, 'PNG', tengah - (foto.w * s) / 2, y + (sisi - foto.h * s) / 2, foto.w * s, foto.h * s, undefined, 'FAST')
+  // Batas bawah area gambar: di atas blok tanda tangan.
+  const yGaris = H - 8.6
+  const batas = k.tampilTtd ? yGaris - 7.6 - 2.4 : H - 4
+  if (a.foto) {
+    y += 2
+    const gPita: GayaTeks = { ukuran: 5.4, tebal: true, warna: EMAS_TEKS, tengah: true }
+    const lp = Math.min(W - 2 * mx, p.lebar(k.tipe, gPita) + 5.4)
+    p.kotak(tengah - lp / 2, y, lp, 3.3, 1.65, { isi: HITAM })
+    p.teks(k.tipe, tengah, y + 2.3, gPita)
+    y += 4.2
+    // Gambar sebesar mungkin (maks. 17 mm) tanpa menabrak tanda tangan.
+    const sisi = Math.max(9, Math.min(17, batas - y))
+    p.kotak(tengah - sisi / 2, y, sisi, sisi, 1.6, { isi: [255, 255, 255], garis: [230, 215, 179], tebal: 0.2 })
+    const f = a.foto
+    const s = Math.min((sisi - 1.4) / f.w, (sisi - 1.4) / f.h)
+    p.gambar(f, tengah - (f.w * s) / 2, y + (sisi - f.h * s) / 2, f.w * s, f.h * s)
   }
 
   // Tanda tangan di bawah tengah
   if (k.tampilTtd) {
-    const yGaris = H - 9
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(4.6)
-    doc.setTextColor(...ABU)
-    doc.text('Hormat kami,', tengah, yGaris - 7.6, { align: 'center' })
-    if (ttd) {
-      const s = Math.min(22 / ttd.w, 6.2 / ttd.h)
-      doc.addImage(ttd.data, 'PNG', tengah - (ttd.w * s) / 2, yGaris - 0.3 - ttd.h * s, ttd.w * s, ttd.h * s, undefined, 'FAST')
+    p.teks('Hormat kami,', tengah, yGaris - 7.6, { ukuran: 4.6, warna: ABU, tengah: true })
+    if (a.ttd) {
+      const s = Math.min(22 / a.ttd.w, 6.2 / a.ttd.h)
+      p.gambar(a.ttd, tengah - (a.ttd.w * s) / 2, yGaris - 0.3 - a.ttd.h * s, a.ttd.w * s, a.ttd.h * s)
     }
-    doc.setDrawColor(...HITAM)
-    doc.setLineWidth(0.2)
-    doc.line(tengah - 11, yGaris, tengah + 11, yGaris)
-    doc.setFont('times', 'bold')
-    doc.setFontSize(6.6)
-    doc.setTextColor(...EMAS)
-    doc.text(k.jabatan, tengah, yGaris + 2.6, { align: 'center' })
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(4.4)
-    doc.setTextColor(...ABU)
-    doc.text('CV. Intan Dua Saudara', tengah, yGaris + 4.6, { align: 'center' })
+    p.garis(tengah - 11, yGaris, tengah + 11, yGaris, HITAM, 0.2)
+    p.teks(k.jabatan, tengah, yGaris + 2.7, { ukuran: 6.8, tebal: true, serif: true, warna: EMAS, tengah: true })
+    p.teks('CV. Intan Dua Saudara', tengah, yGaris + 4.7, { ukuran: 4.4, warna: ABU, tengah: true })
   }
+}
+
+/** FORM ORDERAN BERLIAN satu barang sebagai PDF ukuran kartu KTP tegak. */
+export async function pdfKartuOrder(k: KartuOrderPdf, namaBerkas: string): Promise<void> {
+  const { jsPDF } = await pustaka()
+  const a = await siapkanAsetKartu(k)
+  const [W, H] = UKURAN_KARTU
+  const doc: Doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'portrait' })
+  doc.setProperties({ title: `Form Orderan Berlian No. ${k.nomor}`, subject: 'Form Orderan Berlian', author: 'CV. Intan Dua Saudara', creator: 'IDS' })
+  const font = (g: GayaTeks) => {
+    doc.setFont(g.serif ? 'times' : 'helvetica', g.tebal ? 'bold' : 'normal')
+    doc.setFontSize(g.ukuran)
+  }
+  const pena: Pena = {
+    teks: (t, x, y, g) => { font(g); doc.setTextColor(...(g.warna ?? HITAM)); doc.text(t, x, y, g.tengah ? { align: 'center' } : undefined) },
+    lebar: (t, g) => { font(g); return doc.getTextWidth(t) },
+    garis: (x1, y1, x2, y2, w, tb, putus) => {
+      doc.setDrawColor(...w); doc.setLineWidth(tb)
+      if (putus) doc.setLineDashPattern([0.35, 0.35], 0)
+      doc.line(x1, y1, x2, y2)
+      if (putus) doc.setLineDashPattern([], 0)
+    },
+    kotak: (x, y, w, h, r, o) => {
+      if (o.isi) doc.setFillColor(...o.isi)
+      if (o.garis) { doc.setDrawColor(...o.garis); doc.setLineWidth(o.tebal ?? 0.2) }
+      const gaya = o.isi && o.garis ? 'FD' : o.isi ? 'F' : 'S'
+      if (r > 0) doc.roundedRect(x, y, w, h, r, r, gaya); else doc.rect(x, y, w, h, gaya)
+    },
+    gambar: (g, x, y, w, h) => doc.addImage(g.data, 'PNG', x, y, w, h, undefined, 'FAST'),
+    poligon: (t, w) => poligon(doc, t, w),
+  }
+  gambarKartu(pena, k, a)
   await simpanPdf(doc.output('blob'), namaBerkas)
+}
+
+/** Kartu yang sama sebagai gambar JPG tajam (untuk dikirim lewat WhatsApp: langsung tampil isinya). */
+export async function gambarKartuOrder(k: KartuOrderPdf, namaBerkas: string): Promise<void> {
+  const a = await siapkanAsetKartu(k)
+  const [W, H] = UKURAN_KARTU
+  const px = 24 // piksel per mm (≈ 610 dpi): 1296 × 2054 px
+  const c = document.createElement('canvas')
+  c.width = Math.round(W * px)
+  c.height = Math.round(H * px)
+  const x = c.getContext('2d')
+  if (!x) throw new Error('Gambar tidak bisa dibuat di perangkat ini.')
+  const img = new Map<string, HTMLImageElement>()
+  await Promise.all([a.tegak, a.tanda, a.foto, a.ttd].filter((g): g is Gambar => !!g).map((g) =>
+    new Promise<void>((ok) => { const i = new Image(); i.onload = () => { img.set(g.data, i); ok() }; i.onerror = () => ok(); i.src = g.data })))
+  const rgb = (w: RGB) => `rgb(${w[0]},${w[1]},${w[2]})`
+  const font = (g: GayaTeks) => {
+    x.font = `${g.tebal ? 'bold ' : ''}${g.ukuran * PT * px}px ${g.serif ? '"Times New Roman", Times, serif' : 'Helvetica, Arial, sans-serif'}`
+  }
+  const pena: Pena = {
+    teks: (t, xx, y, g) => { font(g); x.fillStyle = rgb(g.warna ?? HITAM); x.textAlign = g.tengah ? 'center' : 'left'; x.textBaseline = 'alphabetic'; x.fillText(t, xx * px, y * px) },
+    lebar: (t, g) => { font(g); return x.measureText(t).width / px },
+    garis: (x1, y1, x2, y2, w, tb, putus) => {
+      x.strokeStyle = rgb(w); x.lineWidth = tb * px
+      x.setLineDash(putus ? [0.35 * px, 0.35 * px] : [])
+      x.beginPath(); x.moveTo(x1 * px, y1 * px); x.lineTo(x2 * px, y2 * px); x.stroke()
+      x.setLineDash([])
+    },
+    kotak: (xx, y, w, h, r, o) => {
+      x.beginPath()
+      if (r > 0 && typeof x.roundRect === 'function') x.roundRect(xx * px, y * px, w * px, h * px, r * px); else x.rect(xx * px, y * px, w * px, h * px)
+      if (o.isi) { x.fillStyle = rgb(o.isi); x.fill() }
+      if (o.garis) { x.strokeStyle = rgb(o.garis); x.lineWidth = (o.tebal ?? 0.2) * px; x.stroke() }
+    },
+    gambar: (g, xx, y, w, h) => { const i = img.get(g.data); if (i) x.drawImage(i, xx * px, y * px, w * px, h * px) },
+    poligon: (t, w) => {
+      x.beginPath(); t.forEach(([a1, b1], i) => (i ? x.lineTo(a1 * px, b1 * px) : x.moveTo(a1 * px, b1 * px))); x.closePath()
+      x.fillStyle = rgb(w); x.fill()
+    },
+  }
+  gambarKartu(pena, k, a)
+  const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, 'image/jpeg', 0.92))
+  if (!blob) throw new Error('Gambar tidak bisa dibuat di perangkat ini.')
+  const berkas = new File([blob], namaBerkas, { type: 'image/jpeg' })
+  const sentuh = window.matchMedia('(pointer: coarse)').matches
+  if (sentuh && typeof navigator.canShare === 'function' && navigator.canShare({ files: [berkas] })) {
+    try {
+      await navigator.share({ files: [berkas], title: namaBerkas })
+      return
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return
+    }
+  }
+  unduh(blob, namaBerkas)
 }
