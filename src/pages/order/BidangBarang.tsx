@@ -3,9 +3,9 @@ import { Controller, get, useFormContext, useWatch } from 'react-hook-form'
 import { Check, Minus, Plus } from 'lucide-react'
 import type { DataMaster } from '../../sync/useMaster'
 import { labelPengrajin } from '../../sync/useMaster'
-import { formatBulan, formatTanggal } from '../../lib/format'
-import { tambahHari, useFormOrderSiap } from '../../lib/formOrder'
-import { useSinkron } from '../../sync/SyncProvider'
+import { formatBulan } from '../../lib/format'
+import { useFormOrderSiap } from '../../lib/formOrder'
+import { PILIHAN_RING_SIZE } from '../../lib/orderSchema'
 import { Bidang, Isian, cx } from '../../components/ui/ui'
 import { FotoCincin } from '../../components/FotoCincin'
 import { alamatFoto, modelCocok, useKatalogCincin } from '../../lib/kodeCincin'
@@ -21,13 +21,15 @@ interface Props {
   minBerat: number
   /** Pemakaian perak standar per gender (gram). Terisi otomatis saat gender dipilih, selama berat belum diubah manual. */
   beratStandar?: { LADY: number; MAN: number }
+  /** Barang baru: kode cincin, ring size, dan mulai produksi wajib diisi. */
+  wajib?: boolean
 }
 
 const KELAS_PILIH =
   'h-11 w-full rounded-xl border bg-white px-3 text-[15px] text-ink focus:outline-none focus:ring-2 focus:ring-gold-300 focus:border-gold-400'
 
 /** Isian satu barang: pengrajin, kategori, gender, jumlah, tanggal, deskripsi. Dipakai di semua formulir barang. */
-export function BidangBarang({ awalan, master, hariIni, tampilJumlah = true, minBerat, beratStandar }: Props) {
+export function BidangBarang({ awalan, master, hariIni, tampilJumlah = true, minBerat, beratStandar, wajib = false }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, control, setValue, formState, getFieldState } = useFormContext<any>()
   const n = (k: string) => `${awalan}${k}`
@@ -39,10 +41,8 @@ export function BidangBarang({ awalan, master, hariIni, tampilJumlah = true, min
   const tanggal = useWatch({ control, name: n('assigned_date') }) as string
   const bulanManual = useWatch({ control, name: n('production_month') }) as string | undefined
   const gender = useWatch({ control, name: n('gender') }) as 'LADY' | 'MAN' | undefined
-  const targetIsi = useWatch({ control, name: n('target_date') }) as string | undefined
+  const ringSize = useWatch({ control, name: n('ring_size') }) as string | undefined
   const formSiap = useFormOrderSiap()
-  const { pengaturan } = useSinkron()
-  const hariBatas = pengaturan?.overtime_days ?? 10
   // Gender dipilih: isi pemakaian perak standar (Lady 6 g, Man 12 g), kecuali beratnya sudah diketik sendiri.
   useEffect(() => {
     if (!beratStandar || (gender !== 'LADY' && gender !== 'MAN')) return
@@ -103,7 +103,7 @@ export function BidangBarang({ awalan, master, hariIni, tampilJumlah = true, min
         )}
       />
 
-      <div className={cx('grid gap-4', tampilJumlah && 'sm:grid-cols-2')}>
+      <div className="grid gap-4">
         <Controller
           control={control}
           name={n('gender')}
@@ -131,6 +131,16 @@ export function BidangBarang({ awalan, master, hariIni, tampilJumlah = true, min
             </fieldset>
           )}
         />
+        {formSiap && (
+          <Bidang label="Ring size" id={id('ring_size')} wajib={wajib} galat={galat('ring_size')}>
+            <select id={id('ring_size')} className={cx(KELAS_PILIH, 'max-w-xs', galat('ring_size') ? 'border-bad-600' : 'border-ice-300')} {...register(n('ring_size'))}>
+              <option value="">Pilih ukuran</option>
+              {(ringSize && !PILIHAN_RING_SIZE.includes(ringSize) ? [ringSize, ...PILIHAN_RING_SIZE] : PILIHAN_RING_SIZE).map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </Bidang>
+        )}
         {tampilJumlah && (
           <Controller
             control={control}
@@ -164,18 +174,7 @@ export function BidangBarang({ awalan, master, hariIni, tampilJumlah = true, min
         )}
       </div>
 
-      <PilihKodeCincin awalan={awalan} kategori={master.kategori.find((k) => k.id === kategoriTerpilih)?.name ?? null} gender={gender ?? null} />
-      {formSiap && (
-        <div className="grid grid-cols-2 gap-3">
-          <Bidang label="Ring size" id={id('ring_size')} galat={galat('ring_size')} bantuan="Opsional, contoh 13.">
-            <Isian id={id('ring_size')} inputMode="decimal" maxLength={10} placeholder="13" salah={!!galat('ring_size')} {...register(n('ring_size'))} />
-          </Bidang>
-          <Bidang label="Target selesai" id={id('target_date')} galat={galat('target_date')}
-            bantuan={targetIsi ? 'Diisi manual.' : `Kosong = otomatis ${formatTanggal(tambahHari(tanggal || hariIni, hariBatas))} (+${hariBatas} hari).`}>
-            <Isian id={id('target_date')} type="date" min={tanggal || undefined} salah={!!galat('target_date')} {...register(n('target_date'))} />
-          </Bidang>
-        </div>
-      )}
+      <PilihKodeCincin awalan={awalan} kategori={master.kategori.find((k) => k.id === kategoriTerpilih)?.name ?? null} gender={gender ?? null} wajib={wajib} galat={galat('product_id')} />
 
       <Controller
         control={control}
@@ -220,7 +219,7 @@ export function BidangBarang({ awalan, master, hariIni, tampilJumlah = true, min
         <Bidang label="Tanggal diberikan ke pengrajin" id={id('assigned_date')} wajib galat={galat('assigned_date')}>
           <Isian id={id('assigned_date')} type="date" max={hariIni} salah={!!galat('assigned_date')} {...register(n('assigned_date'))} />
         </Bidang>
-        <Bidang label="Mulai produksi" id={id('production_start_date')} galat={galat('production_start_date')} bantuan="Opsional.">
+        <Bidang label="Mulai produksi" id={id('production_start_date')} wajib={wajib} galat={galat('production_start_date')} bantuan={wajib ? undefined : 'Opsional.'}>
           <Isian id={id('production_start_date')} type="date" min={tanggal || undefined} max={hariIni} salah={!!galat('production_start_date')} {...register(n('production_start_date'))} />
         </Bidang>
       </div>
@@ -262,9 +261,9 @@ export function BidangBarang({ awalan, master, hariIni, tampilJumlah = true, min
  * Pilihan KODE CINCIN bergambar. Daftar model otomatis tersaring sesuai kategori + gender.
  * Opsional: "Tanpa kode" boleh. Tidak tampil sebelum SQL kode cincin dijalankan di Supabase.
  */
-function PilihKodeCincin({ awalan, kategori, gender }: { awalan: string; kategori: string | null; gender: 'LADY' | 'MAN' | null }) {
+function PilihKodeCincin({ awalan, kategori, gender, wajib, galat }: { awalan: string; kategori: string | null; gender: 'LADY' | 'MAN' | null; wajib: boolean; galat?: string }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { control, setValue } = useFormContext<any>()
+  const { control, setValue, formState } = useFormContext<any>()
   const nama = `${awalan}product_id`
   const terpilih = (useWatch({ control, name: nama }) as string | null | undefined) || ''
   const katalog = useKatalogCincin()
@@ -292,7 +291,7 @@ function PilihKodeCincin({ awalan, kategori, gender }: { awalan: string; kategor
     ? [...katalog.model.filter((m) => m.id === terpilih), ...cocok]
     : cocok
   const model = katalog.model.find((m) => m.id === terpilih)
-  const pilih = (id: string) => setValue(nama, id, { shouldDirty: true })
+  const pilih = (id: string) => setValue(nama, id, { shouldDirty: true, shouldValidate: formState.isSubmitted })
   const kartu = (m: (typeof katalog.model)[number]) => (
     <TombolModel key={m.id} pilih={terpilih === m.id} kode={m.code}
       src={alamatFoto(m.photo_static, m.photo_path, katalog.foto)} onClick={() => pilih(m.id)} />
@@ -305,7 +304,7 @@ function PilihKodeCincin({ awalan, kategori, gender }: { awalan: string; kategor
     // min-w-0: fieldset bawaan browser melebar mengikuti isinya; tanpa ini halaman ikut bergeser ke samping.
     <fieldset className="min-w-0">
       <legend className="mb-1.5 text-sm font-semibold text-navy-900">
-        Kode cincin <span className="font-normal text-ink-muted">(opsional)</span>
+        Kode cincin {wajib ? <span className="text-gold-600">*</span> : <span className="font-normal text-ink-muted">(opsional)</span>}
       </legend>
       {katalog.memuat && !katalog.model.length ? (
         <p className="text-sm text-ink-muted">Memuat katalog...</p>
@@ -319,7 +318,7 @@ function PilihKodeCincin({ awalan, kategori, gender }: { awalan: string; kategor
           {tampilSemua ? (
             <>
               <div className={KISI}>
-                <TombolModel pilih={!terpilih} onClick={() => pilih('')} kode="Tanpa kode" src={null} kosong />
+                {!wajib && <TombolModel pilih={!terpilih} onClick={() => pilih('')} kode="Tanpa kode" src={null} kosong />}
               </div>
               {kelompok.map((g) => (
                 <div key={g.k}>
@@ -330,10 +329,11 @@ function PilihKodeCincin({ awalan, kategori, gender }: { awalan: string; kategor
             </>
           ) : (
             <div className={KISI}>
-              <TombolModel pilih={!terpilih} onClick={() => pilih('')} kode="Tanpa kode" src={null} kosong />
+              {!wajib && <TombolModel pilih={!terpilih} onClick={() => pilih('')} kode="Tanpa kode" src={null} kosong />}
               {pilihan.map(kartu)}
             </div>
           )}
+          {galat && <p role="alert" className="text-sm text-bad-600">{galat}</p>}
           <p className="text-xs text-ink-muted">
             {!kategori || !gender
               ? 'Pilih kategori dan gender dulu supaya kode yang cocok muncul. '

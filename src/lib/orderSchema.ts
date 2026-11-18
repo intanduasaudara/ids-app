@@ -26,7 +26,14 @@ export function formatBerat(g: number | string | null | undefined): string {
  * Membuat skema barang. `hariIni` = tanggal hari ini (YYYY-MM-DD) di zona waktu usaha,
  * `minBerat` = berat minimal per barang (gram) dari Pengaturan.
  */
-export function skemaBarang(hariIni: string, minBerat: number = BERAT_MINIMAL_BAWAAN) {
+/** Pilihan ring size: 0 sampai 33. */
+export const PILIHAN_RING_SIZE = Array.from({ length: 34 }, (_, i) => String(i))
+
+/**
+ * `wajib` = order/barang BARU: semua isian harus terisi (kode cincin, ring size, mulai produksi).
+ * Saat mengubah barang lama, isian ini tetap boleh kosong supaya data lama bisa disimpan.
+ */
+export function skemaBarang(hariIni: string, minBerat: number = BERAT_MINIMAL_BAWAAN, wajib = false) {
   const min = minBerat > 0 ? minBerat : BERAT_MINIMAL_BAWAAN
   const label = min.toLocaleString('id-ID', { maximumFractionDigits: 2 })
   return z
@@ -78,9 +85,12 @@ export function skemaBarang(hariIni: string, minBerat: number = BERAT_MINIMAL_BA
       message: 'Target tidak boleh sebelum tanggal masuk',
       path: ['target_date'],
     })
+    .refine((b) => !wajib || !!b.product_id, { message: 'Pilih kode cincin', path: ['product_id'] })
+    .refine((b) => !wajib || !!b.ring_size, { message: 'Pilih ring size', path: ['ring_size'] })
+    .refine((b) => !wajib || !!b.production_start_date, { message: 'Isi tanggal mulai produksi', path: ['production_start_date'] })
 }
 
-export function skemaOrder(hariIni: string, minBerat: number = BERAT_MINIMAL_BAWAAN) {
+export function skemaOrder(hariIni: string, minBerat: number = BERAT_MINIMAL_BAWAAN, wajib = false) {
   return z.object({
     order_number: z.string().trim().min(1, 'Nomor order wajib diisi').max(30, 'Maksimal 30 karakter'),
     notes: teksOpsional(1000, 'Catatan'),
@@ -88,7 +98,7 @@ export function skemaOrder(hariIni: string, minBerat: number = BERAT_MINIMAL_BAW
     agent_name: teksOpsional(80, 'Nama agen'),
     team_name: teksOpsional(80, 'Team'),
     shipping_address: teksOpsional(300, 'Alamat pengiriman'),
-    items: z.array(skemaBarang(hariIni, minBerat)).min(1, 'Order harus berisi minimal satu barang'),
+    items: z.array(skemaBarang(hariIni, minBerat, wajib)).min(1, 'Order harus berisi minimal satu barang'),
   })
 }
 

@@ -187,3 +187,18 @@ describe('form orderan berlian', () => {
     expect((muatanOrder(skema.parse({ order_number: '9', items: [{ ...b, target_date: '' }] })).items as Record<string, unknown>[])[0].target_date).toBeNull()
   })
 })
+
+describe('order baru wajib lengkap', () => {
+  const b = { craftsman_id: 'p1', category_id: 'k1', gender: 'LADY', weight_grams: '6', quantity: '1', assigned_date: '2026-11-10' }
+  const lengkap = { ...b, product_id: 'x1', ring_size: '0', production_start_date: '2026-11-10' }
+  it('tidak bisa disimpan bila kode cincin, ring size, atau mulai produksi kosong', () => {
+    const skema = skemaOrder('2026-11-10', 6, true)
+    expect(skema.safeParse({ order_number: '1', items: [lengkap] }).success).toBe(true)
+    expect(skema.safeParse({ order_number: '1', items: [{ ...lengkap, product_id: '' }] }).success).toBe(false)
+    expect(skema.safeParse({ order_number: '1', items: [{ ...lengkap, ring_size: '' }] }).success).toBe(false)
+    expect(skema.safeParse({ order_number: '1', items: [{ ...lengkap, production_start_date: '' }] }).success).toBe(false)
+  })
+  it('ubah barang lama tetap boleh kosong', () => {
+    expect(skemaOrder('2026-11-10', 6, false).safeParse({ order_number: '1', items: [b] }).success).toBe(true)
+  })
+})

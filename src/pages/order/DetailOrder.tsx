@@ -18,7 +18,7 @@ import { Kartu, Kosong, KotakGalat, LencanaStatus, Pemuat, Tombol, cx } from '..
 import { LencanaOrder } from './DaftarOrder'
 import { FotoCincin } from '../../components/FotoCincin'
 import { infoCincin, useFotoUnggahan } from '../../lib/kodeCincin'
-import { LABEL_SPEK, muatFormOrder, namaTipe, targetSelesai } from '../../lib/formOrder'
+import { muatFormOrder, namaTipe, targetSelesai } from '../../lib/formOrder'
 import { useAturanOvertime } from '../../lib/overtime'
 import { DialogBarang, DialogBatal, DialogKoreksiTanggal, DialogStatus, DialogUbahOrder, DialogWhatsApp } from './DialogOrder'
 
@@ -207,17 +207,12 @@ export function DetailOrder() {
                   </div>
                   {(() => {
                     const c = infoCincin(b, fotoCincin)
-                    const f = data.data?.form
-                    const spek = b.product_id ? f?.spek.get(b.product_id) : undefined
                     const target = targetSelesai(b.target_date, b.assigned_date, hariBatas)
                     const tipe = namaTipe(b.product_name, b.category_name, b.gender)
                     const baris: [string, ReactNode, string?][] = [
                       ['No.', o.order_number],
                       ['Type / Model', tipe],
                       ...(b.ring_size ? [['Ring Size', b.ring_size] as [string, ReactNode]] : []),
-                      ...(f?.order?.agent_name ? [['Nama Agen', f.order.agent_name] as [string, ReactNode]] : []),
-                      ...(f?.order?.team_name ? [['Team', f.order.team_name] as [string, ReactNode]] : []),
-                      ...(f?.order?.customer_name ? [['Nama Pemesan', f.order.customer_name] as [string, ReactNode]] : []),
                       ['Tanggal Masuk Orderan', formatTanggal(b.assigned_date)],
                       ['Target Selesai Orderan', <>{formatTanggal(target.tanggal)}{target.otomatis && <span className="ml-1 text-[10px] font-normal text-ink-muted">(otomatis)</span>}</>, 'text-[#c62828]'],
                       ['Pengrajin', <Link to={`/pengrajin/${b.craftsman_id}`} className="hover:underline">{b.craftsman_code}{b.craftsman_name ? ` · ${b.craftsman_name}` : ''}</Link>],
@@ -227,32 +222,20 @@ export function DetailOrder() {
                         <p className="mb-1.5 text-xs font-bold tracking-[0.12em] text-navy-900">FORM ORDERAN BERLIAN</p>
                         <dl className="text-sm">
                           {baris.map(([l, v, warna]) => (
-                            <div key={l} className="grid grid-cols-[minmax(0,9.5rem)_auto_1fr] gap-x-1.5 border-b border-dotted border-ice-300 py-1 last:border-0">
+                            <div key={l} className="grid grid-cols-[minmax(0,8.5rem)_auto_1fr] gap-x-1.5 border-b border-dotted border-ice-300 py-1 last:border-0">
                               <dt className="text-ink-soft">{l}</dt><span className="text-ink-muted">:</span>
                               <dd className={cx('min-w-0 break-words font-semibold text-navy-900', warna)}>{v}</dd>
                             </div>
                           ))}
                         </dl>
-                        {(c.kode || spek) && (
-                          <div className="mt-2">
-                            <p className="text-xs font-bold text-navy-900">Gambar dan Spesifikasi Produk</p>
-                            <span className="mt-1 inline-block rounded-r-lg rounded-tl-lg bg-navy-900 px-3 py-1 text-xs font-bold tracking-wide text-gold-200">{tipe}{c.kode ? ` · ${c.kode}` : ''}</span>
-                            <div className="mt-2 flex items-center gap-3">
-                              <FotoCincin src={c.foto} kode={c.kode} className="h-20 w-20" />
-                              {spek && LABEL_SPEK.some(([k]) => spek[k]) ? (
-                                <dl className="grid min-w-0 flex-1 grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-                                  {LABEL_SPEK.filter(([k]) => spek[k]).map(([k, l]) => (
-                                    <div key={k} className="contents"><dt className="text-ink-soft">{l}</dt><dd className="font-semibold text-navy-900">{spek[k]}</dd></div>
-                                  ))}
-                                </dl>
-                              ) : (
-                                <p className="text-xs text-ink-muted">{f ? 'Spesifikasi model belum diisi. Isi di menu Stok barang → model ini.' : ''}</p>
-                              )}
+                        {c.kode && (
+                          <div className="mt-3 border-t border-ice-200 pt-2">
+                            <p className="text-xs font-bold text-navy-900">Gambar Produk</p>
+                            <span className="mt-1 inline-block rounded-r-lg rounded-tl-lg bg-navy-900 px-3 py-1 text-xs font-bold tracking-wide text-gold-200">{tipe} · {c.kode}</span>
+                            <div className="mt-2 flex justify-center">
+                              <FotoCincin src={c.foto} kode={c.kode} className="h-32 w-32 rounded-2xl" />
                             </div>
                           </div>
-                        )}
-                        {f?.order?.shipping_address && (
-                          <p className="mt-2 border-t border-ice-200 pt-2 text-sm"><span className="font-bold text-navy-900">Alamat Pengiriman :</span> <span className="font-semibold uppercase underline decoration-gold-300">{f.order.shipping_address}</span></p>
                         )}
                       </div>
                     )
@@ -300,7 +283,7 @@ export function DetailOrder() {
         </div>
       </section>
 
-      <DialogUbahOrder order={o} terbuka={ubahOrder} tutup={() => setUbahOrder(false)} berubah={muatUlang} form={data.data?.form?.order ?? null} />
+      <DialogUbahOrder order={o} terbuka={ubahOrder} tutup={() => setUbahOrder(false)} berubah={muatUlang} />
       {master.data && (
         <DialogBarang
           terbuka={dialogBarang.buka}
