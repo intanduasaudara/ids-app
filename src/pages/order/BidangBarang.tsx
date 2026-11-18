@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Controller, get, useFormContext, useWatch } from 'react-hook-form'
-import { Minus, Plus } from 'lucide-react'
+import { Check, Minus, Plus } from 'lucide-react'
 import type { DataMaster } from '../../sync/useMaster'
 import { labelPengrajin } from '../../sync/useMaster'
 import { formatBulan } from '../../lib/format'
 import { Bidang, Isian, cx } from '../../components/ui/ui'
+import { FotoCincin } from '../../components/FotoCincin'
+import { alamatFoto, modelCocok, useKatalogCincin } from '../../lib/kodeCincin'
 
 interface Props {
   /** Awalan nama isian, mis. 'items.0.' untuk barang di dalam order, atau '' untuk satu barang. */
@@ -155,6 +157,8 @@ export function BidangBarang({ awalan, master, hariIni, tampilJumlah = true, min
         )}
       </div>
 
+      <PilihKodeCincin awalan={awalan} kategori={master.kategori.find((k) => k.id === kategoriTerpilih)?.name ?? null} gender={gender ?? null} />
+
       <Controller
         control={control}
         name={n('weight_grams')}
@@ -233,5 +237,104 @@ export function BidangBarang({ awalan, master, hariIni, tampilJumlah = true, min
       </div>
 
     </div>
+  )
+}
+
+/**
+ * Pilihan KODE CINCIN bergambar. Daftar model otomatis tersaring sesuai kategori + gender.
+ * Opsional: "Tanpa kode" boleh. Tidak tampil sebelum SQL kode cincin dijalankan di Supabase.
+ */
+function PilihKodeCincin({ awalan, kategori, gender }: { awalan: string; kategori: string | null; gender: 'LADY' | 'MAN' | null }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { control, setValue } = useFormContext<any>()
+  const nama = `${awalan}product_id`
+  const terpilih = (useWatch({ control, name: nama }) as string | null | undefined) || ''
+  const katalog = useKatalogCincin()
+  const [semua, setSemua] = useState(false)
+
+  // Kategori atau gender diganti setelah memilih kode: kode lama yang tidak cocok lagi dikosongkan.
+  const sebelum = useRef({ kategori, gender })
+  useEffect(() => {
+    const s = sebelum.current
+    sebelum.current = { kategori, gender }
+    if (!terpilih || !katalog.model.length) return
+    if (s.kategori === kategori && s.gender === gender) return
+    if (s.kategori === null && s.gender === null) return
+    if (!modelCocok(katalog.model, kategori, gender).some((m) => m.id === terpilih)) {
+      setValue(nama, '', { shouldDirty: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kategori, gender])
+
+  if (!katalog.siap) return null
+  const cocok = modelCocok(katalog.model, kategori, gender)
+  const daftar = semua || !cocok.length ? katalog.model : cocok
+  // Kode yang sudah terpilih selalu tampil walau di luar saringan (data lama).
+  const pilihan = terpilih && !daftar.some((m) => m.id === terpilih)
+    ? [...katalog.model.filter((m) => m.id === terpilih), ...daftar]
+    : daftar
+  const model = katalog.model.find((m) => m.id === terpilih)
+
+  return (
+    <fieldset>
+      <legend className="mb-1.5 flex w-full flex-wrap items-baseline justify-between gap-x-2 text-sm font-semibold text-navy-900">
+        <span>Kode cincin <span className="font-normal text-ink-muted">(opsional)</span></span>
+        {model && <span className="text-xs font-bold tracking-wide text-[#8E6C27]">{model.code} · {model.name}</span>}
+      </legend>
+      {katalog.memuat && !katalog.model.length ? (
+        <p className="text-sm text-ink-muted">Memuat katalog...</p>
+      ) : (
+        <>
+          <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-2 [scrollbar-width:thin]" role="radiogroup" aria-label="Kode cincin">
+            <TombolModel pilih={!terpilih} onClick={() => setValue(nama, '', { shouldDirty: true })} kode="Tanpa kode" src={null} kosong />
+            {pilihan.map((m) => (
+              <TombolModel key={m.id} pilih={terpilih === m.id} kode={m.code}
+                src={alamatFoto(m.photo_static, m.photo_path, katalog.foto)}
+                onClick={() => setValue(nama, m.id, { shouldDirty: true })} />
+            ))}
+          </div>
+          <p className="text-xs text-ink-muted">
+            {!kategori || !gender
+              ? 'Pilih kategori dan gender dulu supaya kode yang cocok muncul. '
+              : !cocok.length
+                ? `Belum ada model ${kategori} ${gender} di Stok barang, jadi semua model ditampilkan. `
+                : `${cocok.length} model ${kategori} ${gender}. `}
+            {cocok.length > 0 && cocok.length < katalog.model.length && (
+              <button type="button" className="font-semibold text-[#8E6C27] underline" onClick={() => setSemua((v) => !v)}>
+                {semua ? 'Tampilkan yang cocok saja' : 'Tampilkan semua model'}
+              </button>
+            )}
+          </p>
+        </>
+      )}
+    </fieldset>
+  )
+}
+
+function TombolModel({ pilih, onClick, kode, src, kosong }: { pilih: boolean; onClick: () => void; kode: string; src: string | null; kosong?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={pilih}
+      onClick={onClick}
+      className={cx(
+        'relative flex w-[76px] shrink-0 snap-start flex-col items-center gap-1 rounded-xl border p-1.5 transition-[transform,box-shadow,border-color] duration-200 active:scale-95',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400',
+        pilih ? 'border-gold-400 bg-navy-900 shadow-sm' : 'border-ice-300 bg-white hover:border-gold-300',
+      )}
+    >
+      {kosong ? (
+        <span className={cx('grid h-14 w-14 place-items-center rounded-lg border border-dashed text-[10px] font-semibold', pilih ? 'border-gold-300 text-gold-200' : 'border-ice-300 text-ink-muted')}>—</span>
+      ) : (
+        <FotoCincin src={src} kode={kode} className="h-14 w-14" />
+      )}
+      <span className={cx('text-[11px] font-bold leading-tight tracking-wide', pilih ? 'text-gold-200' : 'text-navy-800')}>{kode}</span>
+      {pilih && (
+        <span className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-gold-400 text-navy-900" aria-hidden>
+          <Check className="h-3 w-3" />
+        </span>
+      )}
+    </button>
   )
 }

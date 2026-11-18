@@ -139,3 +139,34 @@ describe('format nota dan perak', () => {
     expect(ketikRupiah('abc')).toBe('')
   })
 })
+
+import { modelCocok, type ModelCincin } from './cincin'
+describe('kode cincin', () => {
+  const m = (code: string, cls: ModelCincin['class'], kind: ModelCincin['kind'], gender: ModelCincin['gender']): ModelCincin =>
+    ({ id: code, code, name: code, class: cls, kind, gender, photo_static: null, photo_path: null })
+  const semua = [
+    m('PR-L01', 'PREMIUM', 'Cincin', 'LADY'), m('PR-M01', 'PREMIUM', 'Cincin', 'MAN'), m('PR-LT01', 'PREMIUM', 'Liontin', 'LADY'),
+    m('HI-L01', 'HIGH', 'Cincin', 'LADY'), m('CP-01', 'COUPLE', 'Cincin', null), m('SL-BR01', 'SULTAN', 'Gelang', 'LADY'),
+    m('DS-M01', 'SPESIAL', 'Cincin', 'MAN'),
+  ]
+  const kode = (k: string, g: 'LADY' | 'MAN' | null) => modelCocok(semua, k, g).map((x) => x.code)
+  it('tersaring sesuai kategori dan gender', () => {
+    expect(kode('PREMIUM', 'LADY')).toEqual(['PR-L01'])
+    expect(kode('PREMIUM', 'MAN')).toEqual(['PR-M01'])
+    expect(kode('HIGH', null)).toEqual(['HI-L01'])
+    expect(kode('LIONTIN', 'LADY')).toEqual(['PR-LT01'])
+    expect(kode('BRACELET', 'LADY')).toEqual(['SL-BR01'])
+    expect(kode('SPESIAL ITEM', 'MAN')).toEqual(['DS-M01'])
+  })
+  it('model tanpa gender (couple) selalu tampil', () => {
+    expect(kode('COUPLE', 'MAN')).toEqual(['CP-01'])
+    expect(kode('COUPLE', 'LADY')).toEqual(['CP-01'])
+  })
+  it('kode cincin ikut dikirim, kosong = tanpa kode', () => {
+    const skema = skemaOrder('2026-11-10')
+    const b = { craftsman_id: 'p1', category_id: 'k1', gender: 'LADY', weight_grams: '6', quantity: '1', assigned_date: '2026-11-10' }
+    expect((muatanOrder(skema.parse({ order_number: '1', items: [{ ...b, product_id: 'x1' }] })).items as Record<string, unknown>[])[0].product_id).toBe('x1')
+    expect((muatanOrder(skema.parse({ order_number: '1', items: [{ ...b, product_id: '' }] })).items as Record<string, unknown>[])[0].product_id).toBeNull()
+    expect((muatanOrder(skema.parse({ order_number: '1', items: [b] })).items as Record<string, unknown>[])[0].product_id).toBeNull()
+  })
+})

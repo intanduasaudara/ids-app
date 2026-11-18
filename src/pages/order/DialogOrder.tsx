@@ -109,8 +109,9 @@ export function DialogBarang({
           assigned_date: barang.assigned_date,
           production_month: barang.production_month_manual ? barang.production_month.slice(0, 7) : '',
           production_start_date: barang.production_start_date ?? '', description: barang.description ?? '', notes: barang.notes ?? '',
+          product_id: barang.product_id ?? '',
         }
-      : { craftsman_id: '', category_id: '', gender: undefined as unknown as 'LADY', weight_grams: minBerat, quantity: 1, assigned_date: hariIni, production_month: '', production_start_date: '', description: '', notes: '' }
+      : { craftsman_id: '', category_id: '', gender: undefined as unknown as 'LADY', weight_grams: minBerat, quantity: 1, assigned_date: hariIni, production_month: '', production_start_date: '', description: '', notes: '', product_id: '' }
   const form = useForm<MasukanBarang, unknown, DataBarang>({ resolver: zodResolver(skema), defaultValues: awal() })
   useEffect(() => {
     if (terbuka) {
@@ -133,6 +134,8 @@ export function DialogBarang({
           assigned_date: d.assigned_date, production_start_date: d.production_start_date || null,
           description: d.description, notes: d.notes,
         }
+        // Kode cincin hanya dikirim bila database sudah punya kolomnya (SQL migrasi 18).
+        if ('product_id' in barang) ubahan.product_id = d.product_id
         // Bulan produksi: manual bila diisi; bila koreksi dimatikan, kembali otomatis.
         if (d.production_month) ubahan.production_month = `${d.production_month}-01`
         else if (barang.production_month_manual) ubahan.production_month = `${d.assigned_date.slice(0, 7)}-01`

@@ -59,6 +59,12 @@ export interface Barang {
   created_at: string
   updated_at: string
   weight_grams: number | null
+  /** Kode cincin (model katalog). Kolom ada setelah SQL migrasi 18 dijalankan. */
+  product_id?: string | null
+  product_code?: string | null
+  product_name?: string | null
+  product_photo_static?: string | null
+  product_photo_path?: string | null
 }
 
 export interface Riwayat {

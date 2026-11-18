@@ -13,6 +13,8 @@ import { KotakGalat, Pemuat, cx } from '../components/ui/ui'
 import { KertasNota, TanggalNota } from '../components/nota/KertasNota'
 import { useIdentitasNota } from '../components/nota/useIdentitasNota'
 import { kelompokPengrajin } from '../lib/nota'
+import { SelCincin } from '../components/FotoCincin'
+import { alamatFoto, infoCincin, useFotoUnggahan } from '../lib/kodeCincin'
 
 // NOTA PEMBAYARAN pengrajin.
 //   /cetak/pengrajin/<id order>                 semua pengrajin di satu order (satu halaman per pengrajin)
@@ -66,6 +68,9 @@ function HalamanNota({ g, kertas, zona, harga, ubahHarga, lapor, lunas }: {
   const kembar = new Map<string, number>()
   g.barang.forEach((b) => kembar.set(b.order_number, (kembar.get(b.order_number) ?? 0) + 1))
   const sempit = kertas === '80mm' || kertas === '58mm'
+  // Thermal 58 mm terlalu sempit untuk kolom foto: kode cincin digabung ke kolom kategori.
+  const sangatSempit = kertas === '58mm'
+  const foto = useFotoUnggahan(g.barang.map((b) => b.product_photo_path))
 
   return (
     <KertasNota
@@ -91,12 +96,13 @@ function HalamanNota({ g, kertas, zona, harga, ubahHarga, lapor, lunas }: {
     >
       <table className="tabel-nota">
         <colgroup>
-          <col className={sempit ? 'w-[10%]' : 'w-[9%]'} /><col className="w-[18%]" /><col /><col className="w-[29%]" /><col className="w-[6%] print:hidden" />
+          <col className={sempit ? 'w-[9%]' : 'w-[8%]'} /><col className={sangatSempit ? 'w-[18%]' : 'w-[15%]'} />{!sangatSempit && <col className={sempit ? 'w-[19%]' : 'w-[17%]'} />}<col /><col className={sempit ? 'w-[27%]' : 'w-[25%]'} /><col className="w-[6%] print:hidden" />
         </colgroup>
         <thead>
           <tr>
             <th className="text-center">No</th>
             <th className="text-left">Kode OR</th>
+            {!sangatSempit && <th>Kode Cincin</th>}
             <th className="text-left">Kategori + Gender</th>
             <th className="text-right">Harga Satuan</th>
             <th className="print:hidden" aria-label="Sembunyikan" />
@@ -107,7 +113,8 @@ function HalamanNota({ g, kertas, zona, harga, ubahHarga, lapor, lunas }: {
             <tr key={b.id} className="break-inside-avoid">
               <td className="text-center">{i + 1}</td>
               <td className="font-semibold">{b.order_number}{(kembar.get(b.order_number) ?? 0) > 1 && <span className="font-normal">-{b.item_no}</span>}</td>
-              <td>{b.category_name} {b.gender}</td>
+              {!sangatSempit && <td><SelCincin kode={b.product_code} src={infoCincin(b, foto).foto} kecil={sempit} /></td>}
+              <td>{b.category_name} {b.gender}{sangatSempit && b.product_code && <span className="block text-[0.85em] font-bold">{b.product_code}</span>}</td>
               <td className="text-right">
                 <input
                   inputMode="numeric"
@@ -125,12 +132,12 @@ function HalamanNota({ g, kertas, zona, harga, ubahHarga, lapor, lunas }: {
             </tr>
           ))}
           {barang.length === 0 && (
-            <tr><td colSpan={4} className="py-4 text-center italic">Tidak ada barang.</td></tr>
+            <tr><td colSpan={sangatSempit ? 4 : 5} className="py-4 text-center italic">Tidak ada barang.</td></tr>
           )}
         </tbody>
         <tfoot>
           <tr className="total-nota">
-            <td colSpan={3} className="text-right">TOTAL</td>
+            <td colSpan={sangatSempit ? 3 : 4} className="text-right">TOTAL</td>
             <td className="text-right tabular-nums">{formatRupiah(total)}</td>
             <td className="print:hidden" />
           </tr>
@@ -207,6 +214,8 @@ export default function Nota() {
   }, [kertas])
 
   const kelompok = useMemo(() => data.data?.kelompok ?? [], [data.data])
+  // Tautan sementara foto unggahan untuk PDF (foto katalog bawaan tidak perlu).
+  const fotoSemua = useFotoUnggahan(kelompok.flatMap((g) => g.barang.map((b) => b.product_photo_path)))
 
   if (jenis === 'serah') return <Navigate to={`/order/${id}`} replace />
   if (data.memuat && !data.data) return <Pemuat />
@@ -228,6 +237,8 @@ export default function Nota() {
           baris: g.barang.filter((b) => !k?.sembunyi.has(b.id)).map((b) => ({
             kodeOr: (kembar.get(b.order_number) ?? 0) > 1 ? `${b.order_number}-${b.item_no}` : b.order_number,
             kategori: `${b.category_name} ${b.gender}`,
+            kodeCincin: b.product_code ?? null,
+            fotoCincin: b.product_code ? alamatFoto(b.product_photo_static, b.product_photo_path, fotoSemua) : null,
             harga: harga[b.id] ?? null,
           })),
         }

@@ -885,4 +885,42 @@ end $$;
 reset role;
 
 \echo
+\echo '== T31 Kode cincin (model katalog) per barang'
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+do $$
+declare v uuid; i uuid; j uuid; pl uuid; pl2 uuid; ph uuid; stok int;
+begin
+  select id into pl  from public.products where code = 'PR-L01';
+  select id into pl2 from public.products where code = 'PR-L02';
+  select id into ph  from public.products where code = 'HI-M01';
+  select stock into stok from public.products where id = pl;
+  v := public.buat_order(jsonb_build_object('order_number', '8900', 'items', jsonb_build_array(
+    tes.item('IDS 001', 'PREMIUM', 'LADY', '2026-10-08', jsonb_build_object('product_id', pl, 'quantity', 2)),
+    tes.item('IDS 002', 'HIGH', 'MAN', '2026-10-08'))));
+  perform tes.sama('kode cincin tersimpan di semua barang yang dipesan', (select count(*) from public.v_items where order_id = v and product_code = 'PR-L01')::text, '2');
+  perform tes.sama('barang tanpa kode cincin tetap sah', (select count(*) from public.v_items where order_id = v and product_id is null)::text, '1');
+  perform tes.sama('foto model ikut tampil', (select product_photo_static from public.v_items where order_id = v and product_id is not null limit 1), 'katalog/v2/pr-l01.webp');
+  perform tes.sama('stok barang tidak berubah karena order', (select stock from public.products where id = pl)::text, stok::text);
+  i := tes.barang(v, 1);
+  update public.order_items set product_id = pl2 where id = i;
+  perform tes.sama('kode cincin bisa diganti', (select product_code from public.v_items where id = i), 'PR-L02');
+  perform tes.sama('ganti kode tercatat dengan kodenya', (select new_value ->> 'kode_cincin' from public.activity_logs where item_id = i and action = 'barang_diubah' order by created_at desc limit 1), 'PR-L02');
+  update public.order_items set product_id = null where id = i;
+  perform tes.sama('kode cincin bisa dikosongkan', (select coalesce(product_code, 'kosong') from public.v_items where id = i), 'kosong');
+  perform tes.gagal('kode yang tidak ada ditolak', format('update public.order_items set product_id = %L where id = %L', gen_random_uuid(), i), 'tidak ditemukan|foreign key');
+  j := tes.barang(v, 3);
+  perform public.hapus_produk(ph);
+  perform tes.gagal('kode di Sampah tidak bisa dipilih', format('update public.order_items set product_id = %L where id = %L', ph, j), 'ada di Sampah');
+  perform public.pulihkan_sampah('produk', ph);
+  update public.order_items set product_id = ph where id = j;
+  perform public.hapus_produk(ph);
+  perform tes.sama('barang lama tetap menampilkan kode walau model dihapus', (select product_code from public.v_items where id = j), 'HI-M01');
+  update public.order_items set weight_grams = 7 where id = j;
+  perform tes.sama('barang dengan model terhapus tetap bisa diubah', (select trim_scale(weight_grams)::text from public.v_items where id = j), '7');
+  perform public.pulihkan_sampah('produk', ph);
+end $$;
+reset role;
+
+\echo
 \echo '== SEMUA TES LULUS'

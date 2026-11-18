@@ -56,6 +56,12 @@ export function skemaBarang(hariIni: string, minBerat: number = BERAT_MINIMAL_BA
         .refine((v) => !v || POLA_TGL.test(v), 'Format tanggal tidak valid'),
       description: teksOpsional(500, 'Deskripsi'),
       notes: teksOpsional(500, 'Catatan'),
+      /** Kode cincin (model katalog). Kosong = tanpa kode. */
+      product_id: z
+        .string()
+        .optional()
+        .nullable()
+        .transform((v) => (v ? v : null)),
     })
     .refine((b) => !b.production_start_date || b.production_start_date >= b.assigned_date, {
       message: 'Tidak boleh sebelum tanggal diberikan ke pengrajin',
@@ -89,6 +95,7 @@ export function muatanBarang(b: DataBarang): Record<string, unknown> {
     production_start_date: b.production_start_date || null,
     description: b.description,
     notes: b.notes,
+    product_id: b.product_id,
   }
 }
 
@@ -105,5 +112,5 @@ export function totalBarang(items: { quantity?: unknown }[]): number {
 }
 
 export function barangKosong(hariIni: string, minBerat: number = BERAT_MINIMAL_BAWAAN): MasukanBarang {
-  return { craftsman_id: '', category_id: '', gender: undefined as unknown as 'LADY', weight_grams: minBerat, quantity: 1, assigned_date: hariIni, production_month: '', production_start_date: '', description: '', notes: '' }
+  return { craftsman_id: '', category_id: '', gender: undefined as unknown as 'LADY', weight_grams: minBerat, quantity: 1, assigned_date: hariIni, production_month: '', production_start_date: '', description: '', notes: '', product_id: '' }
 }

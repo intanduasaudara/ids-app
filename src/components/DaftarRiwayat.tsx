@@ -8,7 +8,7 @@ const LABEL_KOLOM: Record<string, string> = {
   order_number: 'nomor order', customer_name: 'pelanggan', customer_whatsapp: 'WhatsApp',
   category_id: 'kategori', gender: 'gender', description: 'deskripsi', assigned_date: 'tanggal diberikan',
   production_month: 'bulan produksi', production_start_date: 'mulai produksi', photo_path: 'foto',
-  is_active: 'aktif', sort_order: 'urutan',
+  is_active: 'aktif', sort_order: 'urutan', kode_cincin: 'kode cincin', weight_grams: 'berat (g)',
 }
 
 function nilaiTeks(v: unknown, zona: string): string {

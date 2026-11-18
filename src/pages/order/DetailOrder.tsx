@@ -16,6 +16,8 @@ import { Konfirmasi } from '../../components/ui/Dialog'
 import { useNotifikasi } from '../../components/ui/Notifikasi'
 import { Kartu, KodePengrajin, Kosong, KotakGalat, LencanaStatus, NamaPengrajin, Pemuat, Tombol, cx } from '../../components/ui/ui'
 import { LencanaOrder } from './DaftarOrder'
+import { FotoCincin } from '../../components/FotoCincin'
+import { infoCincin, useFotoUnggahan } from '../../lib/kodeCincin'
 import { DialogBarang, DialogBatal, DialogKoreksiTanggal, DialogStatus, DialogUbahOrder, DialogWhatsApp } from './DialogOrder'
 
 export function DetailOrder() {
@@ -24,7 +26,7 @@ export function DetailOrder() {
   const { zona, pengaturan } = useSinkron()
   const { beri } = useNotifikasi()
   const master = useMaster()
-  const versi = useVersiData(['orders', 'order_items', 'craftsmen', 'jewelry_categories'])
+  const versi = useVersiData(['orders', 'order_items', 'craftsmen', 'jewelry_categories', 'products'])
   const versiLog = useVersiData(['activity_logs'])
   const hariIni = tglHariIni(zona)
 
@@ -64,6 +66,9 @@ export function DetailOrder() {
     if (error) throw error
     return (data ?? []) as Riwayat[]
   }, [id, versiLog])
+
+  // Foto unggahan kode cincin (foto katalog bawaan tidak perlu tautan sementara).
+  const fotoCincin = useFotoUnggahan((data.data?.barang ?? []).map((b) => b.product_photo_path))
 
   // Dari peringatan nomor ganda: ?tambah=1 langsung membuka formulir tambah barang.
   useEffect(() => {
@@ -190,6 +195,19 @@ export function DetailOrder() {
                     </div>
                     <LencanaStatus status={b.status} batal={!b.is_active} />
                   </div>
+                  {b.product_code && (() => {
+                    const c = infoCincin(b, fotoCincin)
+                    return (
+                      <div className="mt-3 flex items-center gap-3 rounded-xl border border-gold-200 bg-gold-50/60 p-2">
+                        <FotoCincin src={c.foto} kode={c.kode} className="h-14 w-14" />
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-semibold tracking-[0.15em] text-ink-muted">KODE CINCIN</p>
+                          <p className="font-bold tracking-wide text-[#8E6C27]">{b.product_code}</p>
+                          {b.product_name && <p className="truncate text-xs text-ink-soft">{b.product_name}</p>}
+                        </div>
+                      </div>
+                    )
+                  })()}
                   <Link to={`/pengrajin/${b.craftsman_id}`} className="mt-2 inline-flex items-center gap-2 text-sm hover:underline">
                     <KodePengrajin kode={b.craftsman_code} /><NamaPengrajin nama={b.craftsman_name} className="font-semibold text-navy-900" />
                   </Link>

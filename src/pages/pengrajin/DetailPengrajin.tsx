@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { formatBerat } from '../../lib/orderSchema'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCheck, ChevronLeft, ChevronRight, MapPin, Pencil, Phone, Power, Printer, Search, Trash2 } from 'lucide-react'
+import { ArrowLeft, CheckCheck, ChevronLeft, ChevronRight, FileClock, MapPin, Pencil, Phone, Power, Printer, Search, Trash2 } from 'lucide-react'
 import { db } from '../../lib/supabase'
 import type { Barang, PengrajinRingkas, Riwayat, StatusBarang } from '../../lib/types'
 import { LABEL_STATUS } from '../../lib/types'
@@ -18,6 +18,8 @@ import { KonfirmasiHapusPengrajin, KonfirmasiStatusPengrajin } from './AksiPengr
 import { DialogSelesaiPengerjaan } from './SelesaiPengerjaan'
 import { PerakPengrajin } from '../perak/PerakPengrajin'
 import { useAturanOvertime, useOvertimePerPengrajin } from '../../lib/overtime'
+import { LencanaCincin } from '../../components/FotoCincin'
+import { infoCincin, useFotoUnggahan } from '../../lib/kodeCincin'
 
 const PER_HALAMAN = 25
 type SaringStatus = 'semua' | StatusBarang | 'overtime'
@@ -31,7 +33,7 @@ export function DetailPengrajin() {
   const { id = '' } = useParams()
   const navigasi = useNavigate()
   const { zona } = useSinkron()
-  const versi = useVersiData(['craftsmen', 'order_items', 'orders', 'jewelry_categories'])
+  const versi = useVersiData(['craftsmen', 'order_items', 'orders', 'jewelry_categories', 'products'])
   const versiLog = useVersiData(['activity_logs'])
 
   const [ubah, setUbah] = useState(false)
@@ -92,6 +94,8 @@ export function DetailPengrajin() {
     if (error) throw error
     return { baris: (data ?? []) as Barang[], total: count ?? 0 }
   }, [id, versi, halaman, status, cariAktif, tampilBatal, aturan.batas])
+
+  const fotoCincin = useFotoUnggahan((barang.data?.baris ?? []).map((b) => b.product_photo_path))
 
   const riwayat = useMuat(async () => {
     const { data, error } = await db()
@@ -156,6 +160,9 @@ export function DetailPengrajin() {
             )}
             <Link to={`/cetak/pembayaran/${p.id}`} className="inline-flex h-11 items-center gap-2 rounded-xl border border-gold-300 bg-white px-4 text-sm font-semibold text-navy-900 hover:bg-gold-50">
               <Printer className="h-4 w-4" /> Nota pembayaran
+            </Link>
+            <Link to={`/cetak-riwayat/${p.id}`} className="inline-flex h-11 items-center gap-2 rounded-xl border border-gold-300 bg-white px-4 text-sm font-semibold text-navy-900 hover:bg-gold-50">
+              <FileClock className="h-4 w-4" /> Nota riwayat
             </Link>
             <Tombol ragam="kedua" ikon={<Pencil className="h-4 w-4" />} onClick={() => setUbah(true)}>Ubah data</Tombol>
             <Tombol ragam={p.is_active ? 'hantu' : 'utama'} ikon={<Power className="h-4 w-4" />} onClick={() => setUbahStatus(p)}>
@@ -246,7 +253,7 @@ export function DetailPengrajin() {
                           <Link to={`/order/${b.order_id}`} state={{ dari: `/pengrajin/${p.id}`, label: p.name ?? p.code }} className="hover:underline" onClick={(e) => e.stopPropagation()}>{b.order_number}</Link><span className="ml-1 text-xs font-normal text-ink-muted">#{b.item_no}</span>
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">{formatBerat(b.weight_grams)}</td>
-                        <td className="px-4 py-3">{b.category_name} <span className="text-xs text-ink-muted">· {b.gender}</span></td>
+                        <td className="px-4 py-3">{b.category_name} <span className="text-xs text-ink-muted">· {b.gender}</span>{b.product_code && <span className="ml-2"><LencanaCincin kode={b.product_code} src={infoCincin(b, fotoCincin).foto} /></span>}</td>
                         <td className="px-4 py-3 tabular-nums" title={formatTanggal(b.assigned_date)}>{formatTanggalPendek(b.assigned_date)}</td>
                         <td className="px-4 py-3">
                           <LencanaStatus status={b.status} batal={!b.is_active} />
@@ -288,7 +295,7 @@ export function DetailPengrajin() {
                         <div><dt className="text-ink-muted">Selesai</dt><dd className="font-semibold text-navy-900">{b.completed_at ? formatTanggalPendek(tglLokal(b.completed_at, zona)) : '-'}</dd></div>
                         <div><dt className="text-ink-muted">Diserahkan</dt><dd className="font-semibold text-navy-900">{b.delivered_at ? formatTanggalPendek(tglLokal(b.delivered_at, zona)) : '-'}</dd></div>
                       </dl>
-                      <p className="mt-2 text-xs text-ink-soft">{b.category_name} · {b.gender}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-soft">{b.category_name} · {b.gender}{b.product_code && <LencanaCincin kode={b.product_code} src={infoCincin(b, fotoCincin).foto} />}</div>
                     </Kartu>
                     </Link>
                   </li>

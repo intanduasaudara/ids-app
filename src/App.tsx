@@ -29,6 +29,7 @@ const EditorNota = lazy(() => import('./pages/nota/EditorNota'))
 const StokPerak = lazy(() => import('./pages/perak/StokPerak'))
 const StokBarang = lazy(() => import('./pages/stok/StokBarang'))
 const CetakPerak = lazy(() => import('./pages/perak/CetakPerak'))
+const NotaRiwayat = lazy(() => import('./pages/NotaRiwayat'))
 
 /** Rute terlindungi: hanya administrator yang bisa masuk. */
 function KhususAdmin() {
@@ -53,6 +54,7 @@ const router = createHashRouter([
     children: [
       { path: 'cetak/:jenis/:id', element: <Suspense fallback={<Pemuat />}><Nota /></Suspense> },
       { path: 'cetak-perak', element: <Suspense fallback={<Pemuat />}><CetakPerak /></Suspense> },
+      { path: 'cetak-riwayat/:id', element: <Suspense fallback={<Pemuat />}><NotaRiwayat /></Suspense> },
       {
         element: <AppLayout />,
         children: [

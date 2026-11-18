@@ -52,6 +52,61 @@ async function muatGambar(url: string, maks = 1000): Promise<Gambar | null> {
   }
 }
 
+/** Foto kecil (kode cincin) selalu diubah ke PNG berlatar putih, supaya aman untuk semua jenis foto (webp, jpg, png). */
+async function gambarKecil(url: string, sisi = 160): Promise<Gambar | null> {
+  try {
+    const r = await fetch(url)
+    if (!r.ok) return null
+    const objek = URL.createObjectURL(await r.blob())
+    try {
+      const im = await new Promise<HTMLImageElement>((ok, gagal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = gagal; i.src = objek })
+      const s = Math.min(1, sisi / Math.max(im.naturalWidth, im.naturalHeight))
+      const c = document.createElement('canvas')
+      c.width = Math.max(1, Math.round(im.naturalWidth * s))
+      c.height = Math.max(1, Math.round(im.naturalHeight * s))
+      const g = c.getContext('2d')
+      if (!g) return null
+      g.fillStyle = '#ffffff'
+      g.fillRect(0, 0, c.width, c.height)
+      g.drawImage(im, 0, 0, c.width, c.height)
+      return { data: c.toDataURL('image/png'), w: c.width, h: c.height }
+    } finally {
+      URL.revokeObjectURL(objek)
+    }
+  } catch {
+    return null
+  }
+}
+
+/** Memuat semua foto kode cincin sekaligus (alamat yang sama hanya dimuat sekali). */
+async function muatFotoCincin(alamat: (string | null | undefined)[]): Promise<Map<string, Gambar>> {
+  const unik = Array.from(new Set(alamat.filter((u): u is string => !!u)))
+  const hasil = await Promise.all(unik.map(async (u) => [u, await gambarKecil(u)] as const))
+  return new Map(hasil.filter((x): x is readonly [string, Gambar] => x[1] !== null))
+}
+
+/**
+ * Kolom "Kode Cincin" di tabel PDF: foto kecil di atas, kode di bawahnya.
+ * Mengembalikan pengait autoTable untuk kolom ke-`kolom`.
+ */
+function kolomCincin(doc: Doc, kolom: number, foto: (baris: number) => Gambar | null, sisi: number) {
+  return {
+    parse: (d: { section: string; column: { index: number }; row: { index: number }; cell: { styles: { minCellHeight?: number; valign?: string; cellPadding?: unknown } } }) => {
+      if (d.section !== 'body' || d.column.index !== kolom || !foto(d.row.index)) return
+      d.cell.styles.minCellHeight = sisi + 7
+      d.cell.styles.valign = 'bottom'
+    },
+    draw: (d: { section: string; column: { index: number }; row: { index: number }; cell: { x: number; y: number; width: number } }) => {
+      if (d.section !== 'body' || d.column.index !== kolom) return
+      const g = foto(d.row.index)
+      if (!g) return
+      const s = Math.min(sisi / g.w, sisi / g.h)
+      const w = g.w * s, h = g.h * s
+      doc.addImage(g.data, 'PNG', d.cell.x + (d.cell.width - w) / 2, d.cell.y + 1.2 + (sisi - h) / 2, w, h, undefined, 'FAST')
+    },
+  }
+}
+
 const logoTegak = () => muatGambar(`${import.meta.env.BASE_URL}logo-ids-tegak.png`, 600)
 const logoResmi = () => muatGambar(`${import.meta.env.BASE_URL}logo-ids.png`)
 
@@ -429,15 +484,20 @@ export interface HalamanPembayaran {
   kode: string
   nama: string | null
   tanggalBayar: string
-  baris: { kodeOr: string; kategori: string; harga: number | null }[]
+  baris: { kodeOr: string; kategori: string; kodeCincin?: string | null; fotoCincin?: string | null; harga: number | null }[]
 }
 
 export async function pdfNotaPembayaran(halaman: HalamanPembayaran[], kertas: KertasPdf, diterbitkan: string, namaBerkas: string, o: OpsiNotaPdf): Promise<void> {
   const { jsPDF, autoTable } = await pustaka()
   const sempit = kertas === '80mm' || kertas === '58mm'
-  const aset = await siapkanAset(o, sempit)
+  // Thermal 58 mm terlalu sempit untuk kolom foto: kode cincin digabung ke kolom kategori.
+  const sangatSempit = kertas === '58mm'
+  const [aset, foto] = await Promise.all([
+    siapkanAset(o, sempit),
+    sangatSempit ? Promise.resolve(new Map<string, Gambar>()) : muatFotoCincin(halaman.flatMap((h) => h.baris.map((b) => b.fotoCincin))),
+  ])
   const maksBaris = Math.max(1, ...halaman.map((h) => h.baris.length))
-  const fmt = formatHalaman(kertas, 120 + maksBaris * 7)
+  const fmt = formatHalaman(kertas, 120 + maksBaris * (foto.size ? 13 : 7))
   const doc = new jsPDF({ unit: 'mm', format: fmt })
   const a5 = kertas === 'A5'
   const gaya = gayaTabel(a5, sempit)
@@ -446,17 +506,27 @@ export async function pdfNotaPembayaran(halaman: HalamanPembayaran[], kertas: Ke
     if (idx > 0) doc.addPage(fmt, 'portrait')
     const W = doc.internal.pageSize.getWidth()
     const total = hal.baris.reduce((t, b) => t + (b.harga ?? 0), 0)
+    const sisi = sempit ? 6 : kertas === 'A5' ? 8 : 10
+    const kc = kolomCincin(doc, 2, (r) => { const u = hal.baris[r]?.fotoCincin; return u ? foto.get(u) ?? null : null }, sisi)
+    const rata = sejajarkan()
     const isi = (startY: number, m: number) => autoTable(doc, {
       startY,
-      head: [['No', 'Kode OR', 'Kategori + Gender', 'Harga Satuan']],
+      head: [sangatSempit ? ['No', 'Kode OR', 'Kategori + Gender', 'Harga Satuan'] : ['No', 'Kode OR', 'Kode Cincin', 'Kategori + Gender', 'Harga Satuan']],
       body: hal.baris.length
-        ? hal.baris.map((b, i) => [String(i + 1), b.kodeOr, b.kategori, b.harga != null ? formatRupiah(b.harga) : ''])
+        ? hal.baris.map((b, i) => sangatSempit
+          ? [String(i + 1), b.kodeOr, b.kodeCincin ? `${b.kategori}\n${b.kodeCincin}` : b.kategori, b.harga != null ? formatRupiah(b.harga) : '']
+          : [String(i + 1), b.kodeOr, b.kodeCincin ?? '-', b.kategori, b.harga != null ? formatRupiah(b.harga) : ''])
         : [],
-      foot: [[{ content: 'TOTAL', colSpan: 3, styles: { halign: 'right' } }, formatRupiah(total)]],
+      foot: [[{ content: 'TOTAL', colSpan: sangatSempit ? 3 : 4, styles: { halign: 'right' } }, formatRupiah(total)]],
       margin: { left: m, right: m, bottom: sempit ? 4 : W * 0.06 + 8, top: sempit ? 4 : W * 0.06 + 8 },
       ...gaya,
-      columnStyles: { 0: { cellWidth: sempit ? 6 : W * 0.08 }, 1: { cellWidth: sempit ? 11 : W * 0.17 }, 3: { cellWidth: sempit ? 18 : W * 0.26 } },
-      didParseCell: sejajarkan(),
+      columnStyles: sangatSempit
+        ? { 0: { cellWidth: 6 }, 1: { cellWidth: 11 }, 3: { cellWidth: 18 } }
+        : sempit
+          ? { 0: { cellWidth: 5 }, 1: { cellWidth: 10 }, 2: { cellWidth: 13 }, 4: { cellWidth: 17 } }
+          : { 0: { cellWidth: W * 0.07 }, 1: { cellWidth: W * 0.14 }, 2: { cellWidth: W * 0.16 }, 4: { cellWidth: W * 0.24 } },
+      didParseCell: (d: Parameters<typeof rata>[0] & Parameters<typeof kc.parse>[0]) => { rata(d); if (!sangatSempit) kc.parse(d) },
+      didDrawCell: sangatSempit ? undefined : kc.draw,
       didDrawPage: sempit ? undefined : (d: { pageNumber: number }) => { if (d.pageNumber > 1) hiasanHalaman(doc, aset) },
     })
 
@@ -538,5 +608,116 @@ export async function pdfNotaManual(n: NotaManualPdf, kertas: 'A4' | 'A5', namaB
     didDrawPage: (d: { pageNumber: number }) => { if (d.pageNumber > 1) hiasanHalaman(doc, aset) },
   })
   kaki(doc, aset, n, akhirTabel(doc))
+  await simpanPdf(doc.output('blob'), namaBerkas)
+}
+
+/* ------------------------------------------------------- Nota Riwayat Pengrajin */
+
+export interface BarisRiwayatPdf {
+  kodeOr: string
+  kodeCincin: string | null
+  fotoCincin: string | null
+  kategori: string
+  berat: string
+  diterima: string
+  /** Tanggal selesai / diserahkan (atau '-'). */
+  selesai: string
+  status: string
+  overtime: boolean
+}
+
+export interface NotaRiwayatPdf {
+  kode: string
+  nama: string | null
+  periode: string
+  baris: BarisRiwayatPdf[]
+  /** Ringkasan di baris bawah tabel, mis. "12 barang · Dalam proses 3 · ...". */
+  ringkasan: string
+}
+
+/** NOTA RIWAYAT pengrajin: daftar semua barang dalam periode, tanpa harga dan tanpa cap LUNAS. */
+export async function pdfNotaRiwayat(n: NotaRiwayatPdf, kertas: KertasPdf, diterbitkan: string, namaBerkas: string, o: OpsiNotaPdf): Promise<void> {
+  const { jsPDF, autoTable } = await pustaka()
+  const sempit = kertas === '80mm' || kertas === '58mm'
+  const [aset, foto] = await Promise.all([
+    siapkanAset(o, sempit),
+    sempit ? Promise.resolve(new Map<string, Gambar>()) : muatFotoCincin(n.baris.map((b) => b.fotoCincin)),
+  ])
+  const fmt = formatHalaman(kertas, 130 + n.baris.length * 10)
+  const doc = new jsPDF({ unit: 'mm', format: fmt })
+  const W = doc.internal.pageSize.getWidth()
+  const a5 = kertas === 'A5'
+  const gaya = gayaTabel(a5, sempit)
+  const f = sempit ? 0.72 : a5 ? 0.72 : 0.85
+  const opsi = { ...o, lunas: false }
+  const rata = sejajarkan()
+  const merah = (d: { section: string; row: { index: number }; column: { index: number }; cell: { styles: { textColor?: unknown; fontStyle?: string } } }, kolomStatus: number) => {
+    if (d.section === 'body' && d.column.index === kolomStatus && n.baris[d.row.index]?.overtime) {
+      d.cell.styles.textColor = MERAH
+      d.cell.styles.fontStyle = 'bold'
+    }
+  }
+
+  if (sempit) {
+    strukSempit(doc, aset, 'NOTA RIWAYAT', `Diterbitkan: ${diterbitkan}`,
+      [['Nama', n.nama ?? '(nama belum diisi)'], ['ID', n.kode], ['Periode', n.periode]],
+      (yy) => autoTable(doc, {
+        startY: yy,
+        head: [['No', 'Kode OR', 'Barang', 'Status']],
+        body: n.baris.map((b, i) => [String(i + 1), b.kodeOr,
+          [b.kategori, b.kodeCincin, b.berat].filter(Boolean).join('\n'),
+          `${b.status}\n${b.selesai !== '-' ? b.selesai : b.diterima}`]),
+        foot: [[{ content: n.ringkasan, colSpan: 4, styles: { halign: 'center' } }]],
+        margin: { left: 4, right: 4, bottom: 4, top: 4 },
+        ...gaya,
+        styles: { ...gaya.styles, fontSize: 9.5 * f },
+        columnStyles: { 0: { cellWidth: 5 }, 1: { cellWidth: 11 } },
+        didParseCell: (d: Parameters<typeof rata>[0] & Parameters<typeof merah>[0]) => { rata(d); if (d.section === 'foot') d.cell.styles.halign = 'center'; merah(d, 3) },
+      }), opsi)
+    await simpanPdf(doc.output('blob'), namaBerkas)
+    return
+  }
+
+  hiasanHalaman(doc, aset)
+  const m = W * 0.06
+  const kp = kepala(doc, aset, 'NOTA RIWAYAT', `Diterbitkan: ${diterbitkan}`)
+  let y = kp.kiri
+  const k = a5 ? 0.8 : 1
+  doc.setTextColor(42, 35, 24)
+  doc.setFont('times', 'bold')
+  doc.setFontSize(17 * k)
+  doc.text('Riwayat pengrajin:', m, y)
+  y += 7 * k
+  doc.setFontSize(10.5 * k)
+  for (const [l, v] of [['Nama pengrajin', n.nama ?? '(nama belum diisi)'], ['ID pengrajin', n.kode], ['Periode', n.periode]]) {
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...HITAM)
+    doc.text(l, m, y)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...EMAS)
+    doc.text(`: ${v}`, m + 32 * k, y)
+    y += 5.5 * k
+  }
+  const sisi = a5 ? 7 : 9
+  const kc = kolomCincin(doc, 2, (r) => { const u = n.baris[r]?.fotoCincin; return u ? foto.get(u) ?? null : null }, sisi)
+  autoTable(doc, {
+    startY: Math.max(y, kp.kanan) + 3,
+    head: [['No', 'Kode OR', 'Kode Cincin', 'Kategori + Gender', 'Berat', 'Diterima', 'Selesai / Diserahkan', 'Status']],
+    body: n.baris.map((b, i) => [String(i + 1), b.kodeOr, b.kodeCincin ?? '-', b.kategori, b.berat, b.diterima, b.selesai, b.status]),
+    foot: [[{ content: n.ringkasan, colSpan: 8, styles: { halign: 'center' } }]],
+    margin: { left: m, right: m, bottom: W * 0.06 + 8, top: W * 0.06 + 8 },
+    ...gaya,
+    styles: { ...gaya.styles, fontSize: 9.5 * f, cellPadding: { top: 1.8, bottom: 1.8, left: 1, right: 1 }, minCellHeight: 8 },
+    columnStyles: { 0: { cellWidth: W * 0.05 }, 1: { cellWidth: W * 0.1 }, 2: { cellWidth: W * 0.11 }, 4: { cellWidth: W * 0.08 }, 5: { cellWidth: W * 0.12 }, 6: { cellWidth: W * 0.14 }, 7: { cellWidth: W * 0.13 } },
+    didParseCell: (d: Parameters<typeof rata>[0] & Parameters<typeof kc.parse>[0] & Parameters<typeof merah>[0]) => {
+      rata(d)
+      if (d.section === 'foot') d.cell.styles.halign = 'center'
+      kc.parse(d)
+      merah(d, 7)
+    },
+    didDrawCell: kc.draw,
+    didDrawPage: (d: { pageNumber: number }) => { if (d.pageNumber > 1) hiasanHalaman(doc, aset) },
+  })
+  kaki(doc, aset, opsi, akhirTabel(doc))
   await simpanPdf(doc.output('blob'), namaBerkas)
 }

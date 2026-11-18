@@ -185,6 +185,8 @@ create table if not exists public.order_items (
 );
 -- Berat barang (gram). Aturan minimalnya ada di migrasi 10.
 alter table public.order_items add column if not exists weight_grams numeric(8,2);
+-- Kode cincin (model katalog). Relasi ke katalog dibuat di migrasi 18.
+alter table public.order_items add column if not exists product_id uuid;
 create index if not exists order_items_order_ix      on public.order_items (order_id);
 create index if not exists order_items_craftsman_ix  on public.order_items (craftsman_id, status);
 create index if not exists order_items_category_ix   on public.order_items (category_id);
