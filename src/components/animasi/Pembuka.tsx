@@ -6,6 +6,13 @@ import { bukaSuara, mainkanSfxPembuka, sfxAktif, suaraTerbuka } from '../../lib/
 import { JALUR_LOGO } from '../layout/jalurLogo'
 import { TandaIDS } from '../layout/Logo'
 
+// Gerak garis tepi logo. Diberi tipe longgar karena tipe pathLength di framer-motion
+// berubah mengikuti paket pendukung terbaru (hanya soal tipe, gerakannya tetap sama).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const GARIS_AWAL = { pathLength: 0, opacity: 1 } as any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const GARIS_AKHIR = { pathLength: 1, opacity: [1, 1, 0] } as any
+
 // Animasi pembuka IDS (sekitar 4 detik, sekali per sesi, ketuk untuk melewati):
 //   0,25-1,45  logo resmi IDS tergambar garis demi garis
 //   1,45-2,00  isian emas muncul, logo memantul sedikit sambil agak blur lalu tajam kembali
@@ -162,7 +169,7 @@ function LogoMenggaris() {
           {/* 2. garis tepi yang menggambar bentuk logo */}
           {JALUR_LOGO.map((d, i) => (
             <motion.path key={`garis${i}`} d={d} fill="none" stroke="#F1DEB4" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round"
-              initial={{ pathLength: 0, opacity: 1 }} animate={{ pathLength: 1, opacity: [1, 1, 0] }}
+              initial={GARIS_AWAL} animate={GARIS_AKHIR}
               transition={{ pathLength: { delay: 0.25 + i * 0.12, duration: 1.0, ease: 'easeInOut' }, opacity: { delay: 0.25, duration: 1.8, times: [0, 0.75, 1] } }} />
           ))}
           {/* 3. cahaya menyapu, hanya di dalam bentuk logo */}
