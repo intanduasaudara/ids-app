@@ -923,4 +923,34 @@ end $$;
 reset role;
 
 \echo
+\echo '== T32 Form orderan berlian (agen, team, alamat, ring size, target, spesifikasi model)'
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+do $$
+declare v uuid; i uuid; pr uuid;
+begin
+  select id into pr from public.products where code = 'HI-L03';
+  update public.products set diamond_type = ' Natural Diamond ', diamond_count = '±77 Pcs', diamond_carat = '±1.25 Krat',
+    ring_material = 'Palladium Silver', total_weight = '±6.803 Gram' where id = pr;
+  perform tes.sama('spesifikasi model tersimpan rapi', (select diamond_type from public.products where id = pr), 'Natural Diamond');
+  v := public.buat_order(jsonb_build_object('order_number', '3485', 'customer_name', 'Pemesan Uji', 'agent_name', '  Agen   Uji ',
+    'team_name', 'Team Uji', 'shipping_address', 'Gorontalo - KOTA GORONTALO',
+    'items', jsonb_build_array(tes.item('IDS 002', 'HIGH', 'LADY', '2026-10-16',
+      jsonb_build_object('product_id', pr, 'ring_size', ' 13 ', 'target_date', '2026-10-24')))));
+  perform tes.sama('nama agen tersimpan rapi', (select agent_name from public.orders where id = v), 'Agen Uji');
+  perform tes.sama('team dan alamat tersimpan', (select team_name || ' | ' || shipping_address from public.orders where id = v), 'Team Uji | Gorontalo - KOTA GORONTALO');
+  i := tes.barang(v, 1);
+  perform tes.sama('ring size tersimpan', (select ring_size from public.order_items where id = i), '13');
+  perform tes.sama('target selesai tersimpan', (select target_date::text from public.order_items where id = i), '2026-10-24');
+  update public.order_items set ring_size = '', target_date = null where id = i;
+  perform tes.sama('ring size dan target boleh dikosongkan', (select coalesce(ring_size, 'kosong') || coalesce(target_date::text, '-') from public.order_items where id = i), 'kosong-');
+  update public.orders set agent_name = '', shipping_address = '  ' where id = v;
+  perform tes.sama('agen dan alamat boleh dikosongkan', (select coalesce(agent_name, 'kosong') || coalesce(shipping_address, '-') from public.orders where id = v), 'kosong-');
+  perform tes.gagal('ring size terlalu panjang ditolak', format('update public.order_items set ring_size = %L where id = %L', repeat('9', 11), i), 'check');
+  v := public.buat_order(jsonb_build_object('order_number', '3486', 'items', jsonb_build_array(tes.item('IDS 002', 'HIGH', 'LADY', '2026-10-16'))));
+  perform tes.sama('order tanpa isian form tetap sah', (select count(*) from public.orders where id = v and agent_name is null)::text, '1');
+end $$;
+reset role;
+
+\echo
 \echo '== SEMUA TES LULUS'

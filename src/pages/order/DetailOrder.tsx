@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { DialogSelesaiPengerjaan } from '../pengrajin/SelesaiPengerjaan'
 import { kelompokPengrajin } from '../../lib/nota'
 import { formatBerat } from '../../lib/orderSchema'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Ban, CalendarClock, CheckCheck, MessageCircle, Pencil, Phone, Plus, Printer, RotateCcw, Trash2 } from 'lucide-react'
+import { ArrowLeft, Ban, CalendarClock, CheckCheck, CreditCard, MessageCircle, Pencil, Phone, Plus, Printer, RotateCcw, Trash2 } from 'lucide-react'
 import { db } from '../../lib/supabase'
 import type { Barang, OrderRingkas, Riwayat } from '../../lib/types'
 import { formatBulan, formatTanggal, formatTanggalWaktu, hariIni as tglHariIni } from '../../lib/format'
@@ -14,10 +14,12 @@ import { useMaster } from '../../sync/useMaster'
 import { DaftarRiwayat } from '../../components/DaftarRiwayat'
 import { Konfirmasi } from '../../components/ui/Dialog'
 import { useNotifikasi } from '../../components/ui/Notifikasi'
-import { Kartu, KodePengrajin, Kosong, KotakGalat, LencanaStatus, NamaPengrajin, Pemuat, Tombol, cx } from '../../components/ui/ui'
+import { Kartu, Kosong, KotakGalat, LencanaStatus, Pemuat, Tombol, cx } from '../../components/ui/ui'
 import { LencanaOrder } from './DaftarOrder'
 import { FotoCincin } from '../../components/FotoCincin'
 import { infoCincin, useFotoUnggahan } from '../../lib/kodeCincin'
+import { LABEL_SPEK, muatFormOrder, namaTipe, targetSelesai } from '../../lib/formOrder'
+import { useAturanOvertime } from '../../lib/overtime'
 import { DialogBarang, DialogBatal, DialogKoreksiTanggal, DialogStatus, DialogUbahOrder, DialogWhatsApp } from './DialogOrder'
 
 export function DetailOrder() {
@@ -53,7 +55,11 @@ export function DetailOrder() {
     ])
     if (o.error) throw o.error
     if (b.error) throw b.error
-    return { order: o.data as OrderRingkas | null, barang: (b.data ?? []) as Barang[] }
+    const barang = (b.data ?? []) as Barang[]
+    // Isian Form Orderan Berlian (null bila SQL migrasi 19 belum dijalankan).
+    const form = await muatFormOrder(id, barang.map((x) => x.product_id))
+    if (form) barang.forEach((x) => { const f = form.barang.get(x.id); x.ring_size = f?.ring_size ?? null; x.target_date = f?.target_date ?? null })
+    return { order: o.data as OrderRingkas | null, barang, form }
   }, [id, versi])
 
   const riwayat = useMuat(async () => {
@@ -68,6 +74,7 @@ export function DetailOrder() {
   }, [id, versiLog])
 
   // Foto unggahan kode cincin (foto katalog bawaan tidak perlu tautan sementara).
+  const { hariBatas } = useAturanOvertime()
   const fotoCincin = useFotoUnggahan((data.data?.barang ?? []).map((b) => b.product_photo_path))
 
   // Dari peringatan nomor ganda: ?tambah=1 langsung membuka formulir tambah barang.
@@ -189,31 +196,69 @@ export function DetailOrder() {
               <li key={b.id}>
                 <Kartu className={cx('flex h-full flex-col p-5', !b.is_active && 'opacity-70')}>
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs font-semibold tracking-[0.15em] text-ink-muted">BARANG #{b.item_no}</p>
-                      <p className="mt-1 font-display text-2xl font-semibold text-navy-900">{b.category_name} <span className="text-base font-sans font-bold text-gold-600">{b.gender}</span>{b.weight_grams != null && <span className="ml-2 rounded-full bg-gold-50 px-2 py-0.5 align-middle font-sans text-sm font-bold tabular-nums text-gold-700 ring-1 ring-gold-200">{formatBerat(b.weight_grams)}</span>}</p>
+                      <p className="mt-1 font-display text-2xl font-semibold text-navy-900">
+                        {b.category_name} <span className="text-base font-sans font-bold text-gold-600">{b.gender}</span>
+                        {b.weight_grams != null && <span className="ml-2 inline-block whitespace-nowrap rounded-full bg-gold-50 px-2 py-0.5 align-middle font-sans text-sm font-bold tabular-nums text-gold-700 ring-1 ring-gold-200">{formatBerat(b.weight_grams)}</span>}
+                      </p>
                     </div>
                     <LencanaStatus status={b.status} batal={!b.is_active} />
                   </div>
-                  {b.product_code && (() => {
+                  {(() => {
                     const c = infoCincin(b, fotoCincin)
+                    const f = data.data?.form
+                    const spek = b.product_id ? f?.spek.get(b.product_id) : undefined
+                    const target = targetSelesai(b.target_date, b.assigned_date, hariBatas)
+                    const tipe = namaTipe(b.product_name, b.category_name, b.gender)
+                    const baris: [string, ReactNode, string?][] = [
+                      ['No.', o.order_number],
+                      ['Type / Model', tipe],
+                      ...(b.ring_size ? [['Ring Size', b.ring_size] as [string, ReactNode]] : []),
+                      ...(f?.order?.agent_name ? [['Nama Agen', f.order.agent_name] as [string, ReactNode]] : []),
+                      ...(f?.order?.team_name ? [['Team', f.order.team_name] as [string, ReactNode]] : []),
+                      ...(f?.order?.customer_name ? [['Nama Pemesan', f.order.customer_name] as [string, ReactNode]] : []),
+                      ['Tanggal Masuk Orderan', formatTanggal(b.assigned_date)],
+                      ['Target Selesai Orderan', <>{formatTanggal(target.tanggal)}{target.otomatis && <span className="ml-1 text-[10px] font-normal text-ink-muted">(otomatis)</span>}</>, 'text-[#c62828]'],
+                      ['Pengrajin', <Link to={`/pengrajin/${b.craftsman_id}`} className="hover:underline">{b.craftsman_code}{b.craftsman_name ? ` · ${b.craftsman_name}` : ''}</Link>],
+                    ]
                     return (
-                      <div className="mt-3 flex items-center gap-3 rounded-xl border border-gold-200 bg-gold-50/60 p-2">
-                        <FotoCincin src={c.foto} kode={c.kode} className="h-14 w-14" />
-                        <div className="min-w-0">
-                          <p className="text-[11px] font-semibold tracking-[0.15em] text-ink-muted">KODE CINCIN</p>
-                          <p className="font-bold tracking-wide text-[#8E6C27]">{b.product_code}</p>
-                          {b.product_name && <p className="truncate text-xs text-ink-soft">{b.product_name}</p>}
-                        </div>
+                      <div className="mt-3 rounded-xl border border-ice-200 bg-white p-3">
+                        <p className="mb-1.5 text-xs font-bold tracking-[0.12em] text-navy-900">FORM ORDERAN BERLIAN</p>
+                        <dl className="text-sm">
+                          {baris.map(([l, v, warna]) => (
+                            <div key={l} className="grid grid-cols-[minmax(0,9.5rem)_auto_1fr] gap-x-1.5 border-b border-dotted border-ice-300 py-1 last:border-0">
+                              <dt className="text-ink-soft">{l}</dt><span className="text-ink-muted">:</span>
+                              <dd className={cx('min-w-0 break-words font-semibold text-navy-900', warna)}>{v}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                        {(c.kode || spek) && (
+                          <div className="mt-2">
+                            <p className="text-xs font-bold text-navy-900">Gambar dan Spesifikasi Produk</p>
+                            <span className="mt-1 inline-block rounded-r-lg rounded-tl-lg bg-navy-900 px-3 py-1 text-xs font-bold tracking-wide text-gold-200">{tipe}{c.kode ? ` · ${c.kode}` : ''}</span>
+                            <div className="mt-2 flex items-center gap-3">
+                              <FotoCincin src={c.foto} kode={c.kode} className="h-20 w-20" />
+                              {spek && LABEL_SPEK.some(([k]) => spek[k]) ? (
+                                <dl className="grid min-w-0 flex-1 grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+                                  {LABEL_SPEK.filter(([k]) => spek[k]).map(([k, l]) => (
+                                    <div key={k} className="contents"><dt className="text-ink-soft">{l}</dt><dd className="font-semibold text-navy-900">{spek[k]}</dd></div>
+                                  ))}
+                                </dl>
+                              ) : (
+                                <p className="text-xs text-ink-muted">{f ? 'Spesifikasi model belum diisi. Isi di menu Stok barang → model ini.' : ''}</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {f?.order?.shipping_address && (
+                          <p className="mt-2 border-t border-ice-200 pt-2 text-sm"><span className="font-bold text-navy-900">Alamat Pengiriman :</span> <span className="font-semibold uppercase underline decoration-gold-300">{f.order.shipping_address}</span></p>
+                        )}
                       </div>
                     )
                   })()}
-                  <Link to={`/pengrajin/${b.craftsman_id}`} className="mt-2 inline-flex items-center gap-2 text-sm hover:underline">
-                    <KodePengrajin kode={b.craftsman_code} /><NamaPengrajin nama={b.craftsman_name} className="font-semibold text-navy-900" />
-                  </Link>
                   {b.description && <p className="mt-2 text-sm text-ink-soft">{b.description}</p>}
-                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl bg-ice-50 p-3 text-sm sm:grid-cols-3">
-                    <div><dt className="text-xs text-ink-muted">Diberikan ke pengrajin</dt><dd className="font-semibold text-navy-900">{formatTanggal(b.assigned_date)}</dd></div>
+                  <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl bg-ice-50 p-3 text-sm sm:grid-cols-3">
                     <div><dt className="text-xs text-ink-muted">Bulan produksi</dt><dd className="font-semibold text-navy-900">{formatBulan(b.production_month)}{b.production_month_manual && <span className="text-xs font-normal text-ink-muted"> (manual)</span>}</dd></div>
                     <div><dt className="text-xs text-ink-muted">Mulai produksi</dt><dd className="font-semibold text-navy-900">{formatTanggal(b.production_start_date)}</dd></div>
                     <div><dt className="text-xs text-ink-muted">Selesai dikerjakan</dt><dd className="font-semibold text-navy-900">{formatTanggalWaktu(b.completed_at, zona)}</dd></div>
@@ -230,6 +275,9 @@ export function DetailOrder() {
                     <div className="mt-4 flex flex-wrap gap-2 pt-1">
                       <Tombol kecil onClick={() => setStatusUntuk([b])}>Ubah status</Tombol>
                       <Tombol kecil ragam="kedua" ikon={<Pencil className="h-4 w-4" />} onClick={() => setDialogBarang({ buka: true, barang: b })}>Ubah</Tombol>
+                      <Link to={`/cetak-kartu/${b.id}`} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-gold-300 bg-white px-3 text-sm font-semibold text-navy-900 hover:bg-gold-50">
+                        <CreditCard className="h-4 w-4" /> Kartu order
+                      </Link>
                       {b.status !== 'dalam_proses' && (
                         <Tombol kecil ragam="kedua" ikon={<CalendarClock className="h-4 w-4" />} onClick={() => setKoreksi(b)}>Koreksi tanggal</Tombol>
                       )}
@@ -252,7 +300,7 @@ export function DetailOrder() {
         </div>
       </section>
 
-      <DialogUbahOrder order={o} terbuka={ubahOrder} tutup={() => setUbahOrder(false)} berubah={muatUlang} />
+      <DialogUbahOrder order={o} terbuka={ubahOrder} tutup={() => setUbahOrder(false)} berubah={muatUlang} form={data.data?.form?.order ?? null} />
       {master.data && (
         <DialogBarang
           terbuka={dialogBarang.buka}

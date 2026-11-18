@@ -12,6 +12,12 @@ export interface Produk {
   price: number | null
   notes: string | null
   sort_order: number
+  /** Spesifikasi untuk form order (SQL migrasi 19). */
+  diamond_type?: string | null
+  diamond_count?: string | null
+  diamond_carat?: string | null
+  ring_material?: string | null
+  total_weight?: string | null
 }
 
 export interface GerakStok { id: string; delta: number; stock_after: number; reason: string | null; created_at: string }

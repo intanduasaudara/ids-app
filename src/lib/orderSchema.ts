@@ -56,6 +56,13 @@ export function skemaBarang(hariIni: string, minBerat: number = BERAT_MINIMAL_BA
         .refine((v) => !v || POLA_TGL.test(v), 'Format tanggal tidak valid'),
       description: teksOpsional(500, 'Deskripsi'),
       notes: teksOpsional(500, 'Catatan'),
+      /** Form order: ukuran cincin dan target selesai (kosong = otomatis). */
+      ring_size: teksOpsional(10, 'Ring size'),
+      target_date: z
+        .string()
+        .optional()
+        .nullable()
+        .refine((v) => !v || POLA_TGL.test(v), 'Format tanggal tidak valid'),
       /** Kode cincin (model katalog). Kosong = tanpa kode. */
       product_id: z
         .string()
@@ -67,12 +74,20 @@ export function skemaBarang(hariIni: string, minBerat: number = BERAT_MINIMAL_BA
       message: 'Tidak boleh sebelum tanggal diberikan ke pengrajin',
       path: ['production_start_date'],
     })
+    .refine((b) => !b.target_date || b.target_date >= b.assigned_date, {
+      message: 'Target tidak boleh sebelum tanggal masuk',
+      path: ['target_date'],
+    })
 }
 
 export function skemaOrder(hariIni: string, minBerat: number = BERAT_MINIMAL_BAWAAN) {
   return z.object({
     order_number: z.string().trim().min(1, 'Nomor order wajib diisi').max(30, 'Maksimal 30 karakter'),
     notes: teksOpsional(1000, 'Catatan'),
+    customer_name: teksOpsional(80, 'Nama pemesan'),
+    agent_name: teksOpsional(80, 'Nama agen'),
+    team_name: teksOpsional(80, 'Team'),
+    shipping_address: teksOpsional(300, 'Alamat pengiriman'),
     items: z.array(skemaBarang(hariIni, minBerat)).min(1, 'Order harus berisi minimal satu barang'),
   })
 }
@@ -96,6 +111,8 @@ export function muatanBarang(b: DataBarang): Record<string, unknown> {
     description: b.description,
     notes: b.notes,
     product_id: b.product_id,
+    ring_size: b.ring_size,
+    target_date: b.target_date || null,
   }
 }
 
@@ -103,6 +120,11 @@ export function muatanOrder(d: DataOrder): Record<string, unknown> {
   return {
     order_number: d.order_number,
     notes: d.notes,
+    // Isian form order hanya dikirim bila diisi.
+    ...Object.fromEntries(
+      (['customer_name', 'agent_name', 'team_name', 'shipping_address'] as const)
+        .filter((k) => d[k]).map((k) => [k, d[k]]),
+    ),
     items: d.items.map(muatanBarang),
   }
 }
@@ -112,5 +134,5 @@ export function totalBarang(items: { quantity?: unknown }[]): number {
 }
 
 export function barangKosong(hariIni: string, minBerat: number = BERAT_MINIMAL_BAWAAN): MasukanBarang {
-  return { craftsman_id: '', category_id: '', gender: undefined as unknown as 'LADY', weight_grams: minBerat, quantity: 1, assigned_date: hariIni, production_month: '', production_start_date: '', description: '', notes: '', product_id: '' }
+  return { craftsman_id: '', category_id: '', gender: undefined as unknown as 'LADY', weight_grams: minBerat, quantity: 1, assigned_date: hariIni, production_month: '', production_start_date: '', description: '', notes: '', product_id: '', ring_size: '', target_date: '' }
 }

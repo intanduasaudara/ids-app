@@ -16,23 +16,41 @@ import { useSinkron } from '../../sync/SyncProvider'
 import { useNotifikasi } from '../../components/ui/Notifikasi'
 import { Bidang, Isian, IsianPanjang, Tombol, cx } from '../../components/ui/ui'
 import { BidangBarang } from './BidangBarang'
+import type { DataFormOrder } from '../../lib/formOrder'
 import { cekNomor, PeringatanGanda } from './OrderBaru'
 
 // ------------------------------------------------------------ ubah order
+const teksForm = (maks: number, label: string) =>
+  z.string().max(maks, `${label} maksimal ${maks} karakter`).optional().transform((v) => (v && v.trim() !== '' ? v.trim() : null))
 const skemaUbahOrder = z.object({
   order_number: z.string().trim().min(1, 'Nomor order wajib diisi').max(30, 'Maksimal 30 karakter'),
   notes: z.string().max(1000).optional().transform((v) => (v && v.trim() !== '' ? v.trim() : null)),
+  customer_name: teksForm(80, 'Nama pemesan'),
+  agent_name: teksForm(80, 'Nama agen'),
+  team_name: teksForm(80, 'Team'),
+  shipping_address: teksForm(300, 'Alamat pengiriman'),
 })
 type MasukanUbahOrder = z.input<typeof skemaUbahOrder>
 type DataUbahOrder = z.output<typeof skemaUbahOrder>
 
-export function DialogUbahOrder({ order, terbuka, tutup, berubah }: { order: OrderRingkas; terbuka: boolean; tutup: () => void; berubah: () => void }) {
+export function DialogUbahOrder({ order, terbuka, tutup, berubah, form }: {
+  order: OrderRingkas
+  terbuka: boolean
+  tutup: () => void
+  berubah: () => void
+  /** Isian form order (agen, team, alamat). Kosong = database belum punya kolomnya, isian disembunyikan. */
+  form?: DataFormOrder | null
+}) {
   const { beri } = useNotifikasi()
   const [galat, setGalat] = useState<string | null>(null)
   const [sama, setSama] = useState<Awaited<ReturnType<typeof cekNomor>>>([])
   const awal = (): MasukanUbahOrder => ({
     order_number: order.order_number,
     notes: order.notes ?? '',
+    customer_name: form?.customer_name ?? '',
+    agent_name: form?.agent_name ?? '',
+    team_name: form?.team_name ?? '',
+    shipping_address: form?.shipping_address ?? '',
   })
   const { register, handleSubmit, formState, reset } = useForm<MasukanUbahOrder, unknown, DataUbahOrder>({
     resolver: zodResolver(skemaUbahOrder),
@@ -55,7 +73,9 @@ export function DialogUbahOrder({ order, terbuka, tutup, berubah }: { order: Ord
       if (r.length > 0) return
       const { error } = await db()
         .from('orders')
-        .update({ order_number: d.order_number })
+        .update(form
+          ? { order_number: d.order_number, customer_name: d.customer_name, agent_name: d.agent_name, team_name: d.team_name, shipping_address: d.shipping_address }
+          : { order_number: d.order_number })
         .eq('id', order.id)
       if (error) throw error
       beri('Data order disimpan.')
@@ -74,6 +94,24 @@ export function DialogUbahOrder({ order, terbuka, tutup, berubah }: { order: Ord
         <Bidang label="Nomor order" id="uo-nomor" wajib galat={e.order_number?.message}>
           <Isian id="uo-nomor" salah={!!e.order_number} {...register('order_number')} />
         </Bidang>
+        {form && (
+          <>
+            <Bidang label="Nama pemesan" id="uo-pemesan" galat={e.customer_name?.message}>
+              <Isian id="uo-pemesan" maxLength={80} {...register('customer_name')} />
+            </Bidang>
+            <div className="grid grid-cols-2 gap-3">
+              <Bidang label="Nama agen" id="uo-agen" galat={e.agent_name?.message}>
+                <Isian id="uo-agen" maxLength={80} {...register('agent_name')} />
+              </Bidang>
+              <Bidang label="Team" id="uo-team" galat={e.team_name?.message}>
+                <Isian id="uo-team" maxLength={80} {...register('team_name')} />
+              </Bidang>
+            </div>
+            <Bidang label="Alamat pengiriman" id="uo-alamat" galat={e.shipping_address?.message}>
+              <IsianPanjang id="uo-alamat" rows={2} maxLength={300} {...register('shipping_address')} />
+            </Bidang>
+          </>
+        )}
         {galat && <p role="alert" className="rounded-xl bg-bad-50 p-3 text-sm text-bad-700">{galat}</p>}
       </form>
     </Jendela>
@@ -110,8 +148,9 @@ export function DialogBarang({
           production_month: barang.production_month_manual ? barang.production_month.slice(0, 7) : '',
           production_start_date: barang.production_start_date ?? '', description: barang.description ?? '', notes: barang.notes ?? '',
           product_id: barang.product_id ?? '',
+          ring_size: barang.ring_size ?? '', target_date: barang.target_date ?? '',
         }
-      : { craftsman_id: '', category_id: '', gender: undefined as unknown as 'LADY', weight_grams: minBerat, quantity: 1, assigned_date: hariIni, production_month: '', production_start_date: '', description: '', notes: '', product_id: '' }
+      : { craftsman_id: '', category_id: '', gender: undefined as unknown as 'LADY', weight_grams: minBerat, quantity: 1, assigned_date: hariIni, production_month: '', production_start_date: '', description: '', notes: '', product_id: '', ring_size: '', target_date: '' }
   const form = useForm<MasukanBarang, unknown, DataBarang>({ resolver: zodResolver(skema), defaultValues: awal() })
   useEffect(() => {
     if (terbuka) {
@@ -136,6 +175,8 @@ export function DialogBarang({
         }
         // Kode cincin hanya dikirim bila database sudah punya kolomnya (SQL migrasi 18).
         if ('product_id' in barang) ubahan.product_id = d.product_id
+        // Ring size dan target hanya dikirim bila database sudah punya kolomnya (SQL migrasi 19).
+        if ('ring_size' in barang) { ubahan.ring_size = d.ring_size; ubahan.target_date = d.target_date || null }
         // Bulan produksi: manual bila diisi; bila koreksi dimatikan, kembali otomatis.
         if (d.production_month) ubahan.production_month = `${d.production_month}-01`
         else if (barang.production_month_manual) ubahan.production_month = `${d.assigned_date.slice(0, 7)}-01`

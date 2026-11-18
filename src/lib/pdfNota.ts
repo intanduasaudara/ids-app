@@ -721,3 +721,123 @@ export async function pdfNotaRiwayat(n: NotaRiwayatPdf, kertas: KertasPdf, diter
   kaki(doc, aset, opsi, akhirTabel(doc))
   await simpanPdf(doc.output('blob'), namaBerkas)
 }
+
+/* ------------------------------------------------- Kartu Form Orderan Berlian */
+
+export interface KartuOrderPdf {
+  nomor: string
+  /** [label, isi, merah?] */
+  baris: [string, string, boolean?][]
+  tipe: string
+  fotoUrl: string | null
+  spek: [string, string][]
+  alamat: string | null
+}
+
+/** Ukuran kartu KTP tegak: 54 × 85,6 mm. */
+export const UKURAN_KARTU: [number, number] = [54, 85.6]
+
+/** FORM ORDERAN BERLIAN satu barang, ukuran kartu KTP tegak (bisa disimpan PDF atau dicetak). */
+export async function pdfKartuOrder(k: KartuOrderPdf, namaBerkas: string): Promise<void> {
+  const { jsPDF } = await pustaka()
+  const [logo, foto] = await Promise.all([logoResmi(), k.fotoUrl ? gambarKecil(k.fotoUrl, 300) : Promise.resolve(null)])
+  const [W, H] = UKURAN_KARTU
+  const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'portrait' })
+  const m = 3
+  let y = 3
+  // Bingkai emas tipis
+  doc.setDrawColor(...EMAS)
+  doc.setLineWidth(0.3)
+  doc.roundedRect(1.2, 1.2, W - 2.4, H - 2.4, 1.5, 1.5, 'S')
+  if (logo) {
+    const lw = 15
+    const lh = (lw * logo.h) / logo.w
+    doc.addImage(logo.data, 'PNG', (W - lw) / 2, y, lw, lh, undefined, 'FAST')
+    y += lh + 1.6
+  }
+  doc.setDrawColor(...EMAS)
+  doc.setLineWidth(0.4)
+  doc.line(m, y, W - m, y)
+  y += 3
+  doc.setTextColor(...HITAM)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.text(`No. ${k.nomor}`, m, y)
+  y += 3
+  doc.setFontSize(7.4)
+  doc.text('FORM ORDERAN BERLIAN', m, y)
+  y += 1.4
+
+  const xTitik = m + 18.5
+  const xIsi = xTitik + 1.4
+  const lebarIsi = W - m - xIsi
+  for (const [label, isi, merah] of k.baris) {
+    doc.setFontSize(5.6)
+    doc.setFont('helvetica', 'bold')
+    const baris = doc.splitTextToSize(isi || '-', lebarIsi) as string[]
+    const tinggi = Math.max(1, baris.length) * 2.3 + 0.8
+    const yTeks = y + 2.3
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...HITAM)
+    doc.text(label, m, yTeks)
+    doc.text(':', xTitik, yTeks)
+    doc.setFont('helvetica', 'bold')
+    if (merah) doc.setTextColor(...MERAH)
+    baris.forEach((b, i) => doc.text(b, xIsi, yTeks + i * 2.3))
+    doc.setTextColor(...HITAM)
+    y += tinggi
+    doc.setDrawColor(...GARIS)
+    doc.setLineWidth(0.15)
+    doc.setLineDashPattern([0.4, 0.4], 0)
+    doc.line(m, y, W - m, y)
+    doc.setLineDashPattern([], 0)
+  }
+
+  y += 3
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6)
+  doc.text('Gambar dan Spesifikasi Produk', m, y)
+  y += 1.2
+  doc.setFontSize(6)
+  const lebarPita = Math.min(W - 2 * m, doc.getTextWidth(k.tipe) + 5)
+  doc.setFillColor(...HITAM)
+  doc.roundedRect(m, y, lebarPita, 4, 1, 1, 'F')
+  doc.setTextColor(...EMAS_TEKS)
+  doc.text(k.tipe, m + 2.5, y + 2.85, { maxWidth: W - 2 * m - 4 })
+  doc.setTextColor(...HITAM)
+  y += 5.2
+  const sisi = 15
+  if (foto) {
+    const s = Math.min(sisi / foto.w, sisi / foto.h)
+    doc.addImage(foto.data, 'PNG', m + (sisi - foto.w * s) / 2, y + (sisi - foto.h * s) / 2, foto.w * s, foto.h * s, undefined, 'FAST')
+  }
+  const xSpek = foto ? m + sisi + 2 : m
+  let ySpek = y + 2.2
+  for (const [l, v] of k.spek) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(4.8)
+    doc.setTextColor(...ABU)
+    doc.text(l, xSpek, ySpek)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...HITAM)
+    doc.text(v, xSpek + 12.5, ySpek, { maxWidth: W - m - xSpek - 12.5 })
+    ySpek += 2.6
+  }
+  y = Math.max(y + (foto ? sisi : 0), ySpek - 1) + 2.5
+
+  if (k.alamat) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(5.4)
+    const teks = doc.splitTextToSize(`Alamat Pengiriman : ${k.alamat.toUpperCase()}`, W - 2 * m) as string[]
+    teks.forEach((b) => {
+      if (y < H - 2.5) {
+        doc.text(b, m, y)
+        doc.setDrawColor(...HITAM)
+        doc.setLineWidth(0.12)
+        doc.line(m, y + 0.5, m + doc.getTextWidth(b), y + 0.5)
+      }
+      y += 2.4
+    })
+  }
+  await simpanPdf(doc.output('blob'), namaBerkas)
+}

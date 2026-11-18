@@ -170,3 +170,20 @@ describe('kode cincin', () => {
     expect((muatanOrder(skema.parse({ order_number: '1', items: [b] })).items as Record<string, unknown>[])[0].product_id).toBeNull()
   })
 })
+
+describe('form orderan berlian', () => {
+  const skema = skemaOrder('2026-11-10')
+  const b = { craftsman_id: 'p1', category_id: 'k1', gender: 'LADY', weight_grams: '6', quantity: '1', assigned_date: '2026-11-10' }
+  it('isian order hanya dikirim bila diisi, ring size dirapikan', () => {
+    const o = muatanOrder(skema.parse({ order_number: '9', agent_name: ' Agen ', team_name: '', items: [{ ...b, ring_size: ' 13 ', target_date: '2026-11-20' }] }))
+    const it0 = (o.items as Record<string, unknown>[])[0]
+    expect(o.agent_name).toBe('Agen')
+    expect('team_name' in o).toBe(false)
+    expect(it0.ring_size).toBe('13')
+    expect(it0.target_date).toBe('2026-11-20')
+  })
+  it('target tidak boleh sebelum tanggal masuk, kosong = otomatis', () => {
+    expect(skema.safeParse({ order_number: '9', items: [{ ...b, target_date: '2026-11-01' }] }).success).toBe(false)
+    expect((muatanOrder(skema.parse({ order_number: '9', items: [{ ...b, target_date: '' }] })).items as Record<string, unknown>[])[0].target_date).toBeNull()
+  })
+})

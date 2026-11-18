@@ -11,7 +11,8 @@ import { LABEL_STATUS_ORDER, statusOrderTampil, type StatusOrder } from '../../l
 import { useSinkron } from '../../sync/SyncProvider'
 import { useMaster } from '../../sync/useMaster'
 import { useNotifikasi } from '../../components/ui/Notifikasi'
-import { Bidang, Isian, Kartu, KepalaHalaman, KotakGalat, Pemuat, Tombol } from '../../components/ui/ui'
+import { Bidang, Isian, IsianPanjang, Kartu, KepalaHalaman, KotakGalat, Pemuat, Tombol } from '../../components/ui/ui'
+import { useFormOrderSiap } from '../../lib/formOrder'
 import { BidangBarang } from './BidangBarang'
 
 interface OrderSama {
@@ -59,6 +60,7 @@ export function OrderBaru() {
   const minBerat = Number(pengaturan?.min_weight_grams) || BERAT_MINIMAL_BAWAAN
   const beratStandar = { LADY: Number(pengaturan?.silver_lady_grams) || 6, MAN: Number(pengaturan?.silver_man_grams) || 12 }
   const master = useMaster()
+  const formSiap = useFormOrderSiap()
   const navigasi = useNavigate()
   const { beri } = useNotifikasi()
   const hariIni = tglHariIni(zona)
@@ -68,7 +70,7 @@ export function OrderBaru() {
 
   const form = useForm<MasukanOrder, unknown, DataOrder>({
     resolver: zodResolver(skema),
-    defaultValues: { order_number: '', notes: '', items: [barangKosong(hariIni, minBerat)] },
+    defaultValues: { order_number: '', notes: '', customer_name: '', agent_name: '', team_name: '', shipping_address: '', items: [barangKosong(hariIni, minBerat)] },
   })
   const { register, handleSubmit, control, formState } = form
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
@@ -130,7 +132,27 @@ export function OrderBaru() {
                 <Isian id="order_number" inputMode="text" autoComplete="off" placeholder="Contoh: 2574" salah={!!e.order_number || sama.length > 0}
                   {...register('order_number', { onBlur: (ev) => void periksaNomor(ev.target.value) })} />
               </Bidang>
+              {formSiap && (
+                <Bidang label="Nama pemesan" id="customer_name" galat={e.customer_name?.message}>
+                  <Isian id="customer_name" maxLength={80} autoComplete="off" {...register('customer_name')} />
+                </Bidang>
+              )}
             </div>
+            {formSiap && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <Bidang label="Nama agen" id="agent_name" galat={e.agent_name?.message}>
+                    <Isian id="agent_name" maxLength={80} autoComplete="off" {...register('agent_name')} />
+                  </Bidang>
+                  <Bidang label="Team" id="team_name" galat={e.team_name?.message}>
+                    <Isian id="team_name" maxLength={80} autoComplete="off" {...register('team_name')} />
+                  </Bidang>
+                </div>
+                <Bidang label="Alamat pengiriman" id="shipping_address" galat={e.shipping_address?.message} bantuan="Opsional. Tampil di kartu Form Orderan Berlian.">
+                  <IsianPanjang id="shipping_address" rows={2} maxLength={300} {...register('shipping_address')} />
+                </Bidang>
+              </>
+            )}
           </Kartu>
 
           {fields.map((f, i) => (

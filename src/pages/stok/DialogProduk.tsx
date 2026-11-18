@@ -8,6 +8,7 @@ import { Jendela, Konfirmasi } from '../../components/ui/Dialog'
 import { useNotifikasi } from '../../components/ui/Notifikasi'
 import { Bidang, Isian, Tombol, cx } from '../../components/ui/ui'
 import { JENIS, KELAS, LABEL_KELAS, fotoProduk, type GerakStok, type Produk } from './produk'
+import { LABEL_SPEK, type SpekModel } from '../../lib/formOrder'
 
 interface Isi { code: string; name: string; class: Produk['class']; kind: Produk['kind']; gender: '' | 'LADY' | 'MAN'; notes: string; harga: string }
 const kosong: Isi = { code: '', name: '', class: 'PREMIUM', kind: 'Cincin', gender: '', notes: '', harga: '' }
@@ -33,6 +34,7 @@ export function DialogProduk({ produk, tutup, berubah, fotoUnggahan }: {
   const [simpan, setSimpan] = useState(false)
   const [tanyaHapus, setTanyaHapus] = useState(false)
   const [harga, setHarga] = useState('')
+  const [spek, setSpek] = useState<Record<keyof SpekModel, string>>({ diamond_type: '', diamond_count: '', diamond_carat: '', ring_material: '', total_weight: '' })
   const berkas = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -44,6 +46,7 @@ export function DialogProduk({ produk, tutup, berubah, fotoUnggahan }: {
     setUbahData(baru)
     setIsi(p ? { code: p.code, name: p.name, class: p.class, kind: p.kind, gender: p.gender ?? '', notes: p.notes ?? '', harga: p.price != null ? ketikRupiah(String(Math.round(p.price))) : '' } : kosong)
     setHarga(p?.price != null ? ketikRupiah(String(Math.round(p.price))) : '')
+    setSpek({ diamond_type: p?.diamond_type ?? '', diamond_count: p?.diamond_count ?? '', diamond_carat: p?.diamond_carat ?? '', ring_material: p?.ring_material ?? '', total_weight: p?.total_weight ?? '' })
     setRiwayat(null)
     if (p) {
       db().from('product_stock_moves').select('id, delta, stock_after, reason, created_at').eq('product_id', p.id)
@@ -89,6 +92,26 @@ export function DialogProduk({ produk, tutup, berubah, fotoUnggahan }: {
       const { error } = await db().from('products').update({ price: nilai }).eq('id', p.id)
       if (error) throw error
       beri(nilai == null ? `Harga ${p.name} dikosongkan.` : `Harga ${p.name} disimpan: ${formatRupiah(nilai)}.`)
+      berubah()
+    } catch (e) {
+      setGalat(pesanGalat(e))
+    } finally {
+      setSimpan(false)
+    }
+  }
+
+  // Spesifikasi model untuk Form Orderan Berlian (tampil di setiap order yang memakai kode ini).
+  const adaSpek = !!p && 'diamond_type' in p
+  const spekBerubah = !!p && LABEL_SPEK.some(([k]) => (spek[k] ?? '') !== (p[k] ?? ''))
+  const simpanSpek = async () => {
+    if (!p) return
+    setSimpan(true)
+    setGalat(null)
+    try {
+      const muatan = Object.fromEntries(LABEL_SPEK.map(([k]) => [k, spek[k].trim() || null]))
+      const { error } = await db().from('products').update(muatan).eq('id', p.id)
+      if (error) throw error
+      beri(`Spesifikasi ${p.name} disimpan.`)
       berubah()
     } catch (e) {
       setGalat(pesanGalat(e))
@@ -197,6 +220,26 @@ export function DialogProduk({ produk, tutup, berubah, fotoUnggahan }: {
               </label>
               <Tombol ragam="kedua" memuat={simpan} disabled={harga === (p.price != null ? ketikRupiah(String(Math.round(p.price))) : '')} onClick={() => void simpanHarga()}>Simpan harga</Tombol>
             </div>
+
+            {adaSpek && (
+              <div className="rounded-xl border border-gold-200 bg-white p-3">
+                <p className="text-sm font-semibold text-navy-900">Spesifikasi produk</p>
+                <p className="mb-2 text-xs text-ink-muted">Diisi sekali, lalu otomatis tampil di Form Orderan Berlian setiap order dengan kode {p.code}.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {LABEL_SPEK.map(([k, label]) => (
+                    <label key={k} className={cx('text-xs font-semibold text-ink-soft', k === 'diamond_type' && 'col-span-2')}>
+                      {label}
+                      <Isian className="mt-1 h-10 text-sm" value={spek[k]} maxLength={40}
+                        placeholder={{ diamond_type: 'Natural Diamond', diamond_count: '±77 Pcs', diamond_carat: '±1.25 Krat', ring_material: 'Palladium Silver', total_weight: '±6.803 Gram' }[k]}
+                        onChange={(e) => setSpek({ ...spek, [k]: e.target.value })} />
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-2 flex justify-end">
+                  <Tombol kecil ragam="kedua" memuat={simpan} disabled={!spekBerubah} onClick={() => void simpanSpek()}>Simpan spesifikasi</Tombol>
+                </div>
+              </div>
+            )}
 
             <div className="rounded-xl bg-ice-50 p-4">
               <div className="mb-3 grid grid-cols-2 gap-2">

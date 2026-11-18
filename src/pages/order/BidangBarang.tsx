@@ -3,7 +3,9 @@ import { Controller, get, useFormContext, useWatch } from 'react-hook-form'
 import { Check, Minus, Plus } from 'lucide-react'
 import type { DataMaster } from '../../sync/useMaster'
 import { labelPengrajin } from '../../sync/useMaster'
-import { formatBulan } from '../../lib/format'
+import { formatBulan, formatTanggal } from '../../lib/format'
+import { tambahHari, useFormOrderSiap } from '../../lib/formOrder'
+import { useSinkron } from '../../sync/SyncProvider'
 import { Bidang, Isian, cx } from '../../components/ui/ui'
 import { FotoCincin } from '../../components/FotoCincin'
 import { alamatFoto, modelCocok, useKatalogCincin } from '../../lib/kodeCincin'
@@ -37,6 +39,10 @@ export function BidangBarang({ awalan, master, hariIni, tampilJumlah = true, min
   const tanggal = useWatch({ control, name: n('assigned_date') }) as string
   const bulanManual = useWatch({ control, name: n('production_month') }) as string | undefined
   const gender = useWatch({ control, name: n('gender') }) as 'LADY' | 'MAN' | undefined
+  const targetIsi = useWatch({ control, name: n('target_date') }) as string | undefined
+  const formSiap = useFormOrderSiap()
+  const { pengaturan } = useSinkron()
+  const hariBatas = pengaturan?.overtime_days ?? 10
   // Gender dipilih: isi pemakaian perak standar (Lady 6 g, Man 12 g), kecuali beratnya sudah diketik sendiri.
   useEffect(() => {
     if (!beratStandar || (gender !== 'LADY' && gender !== 'MAN')) return
@@ -159,6 +165,17 @@ export function BidangBarang({ awalan, master, hariIni, tampilJumlah = true, min
       </div>
 
       <PilihKodeCincin awalan={awalan} kategori={master.kategori.find((k) => k.id === kategoriTerpilih)?.name ?? null} gender={gender ?? null} />
+      {formSiap && (
+        <div className="grid grid-cols-2 gap-3">
+          <Bidang label="Ring size" id={id('ring_size')} galat={galat('ring_size')} bantuan="Opsional, contoh 13.">
+            <Isian id={id('ring_size')} inputMode="decimal" maxLength={10} placeholder="13" salah={!!galat('ring_size')} {...register(n('ring_size'))} />
+          </Bidang>
+          <Bidang label="Target selesai" id={id('target_date')} galat={galat('target_date')}
+            bantuan={targetIsi ? 'Diisi manual.' : `Kosong = otomatis ${formatTanggal(tambahHari(tanggal || hariIni, hariBatas))} (+${hariBatas} hari).`}>
+            <Isian id={id('target_date')} type="date" min={tanggal || undefined} salah={!!galat('target_date')} {...register(n('target_date'))} />
+          </Bidang>
+        </div>
+      )}
 
       <Controller
         control={control}

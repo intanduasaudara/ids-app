@@ -65,6 +65,9 @@ export interface Barang {
   product_name?: string | null
   product_photo_static?: string | null
   product_photo_path?: string | null
+  /** Form order (SQL migrasi 19): diisi dari tabel order_items di halaman detail order. */
+  ring_size?: string | null
+  target_date?: string | null
 }
 
 export interface Riwayat {

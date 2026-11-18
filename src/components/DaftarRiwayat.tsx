@@ -9,6 +9,7 @@ const LABEL_KOLOM: Record<string, string> = {
   category_id: 'kategori', gender: 'gender', description: 'deskripsi', assigned_date: 'tanggal diberikan',
   production_month: 'bulan produksi', production_start_date: 'mulai produksi', photo_path: 'foto',
   is_active: 'aktif', sort_order: 'urutan', kode_cincin: 'kode cincin', weight_grams: 'berat (g)',
+  agent_name: 'nama agen', team_name: 'team', shipping_address: 'alamat pengiriman', ring_size: 'ring size', target_date: 'target selesai',
 }
 
 function nilaiTeks(v: unknown, zona: string): string {
