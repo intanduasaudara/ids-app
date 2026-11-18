@@ -749,7 +749,7 @@ export async function pdfKartuOrder(k: KartuOrderPdf, namaBerkas: string): Promi
     k.tampilTtd && k.tandaTanganUrl ? muatGambar(k.tandaTanganUrl, 500) : Promise.resolve(null),
   ])
   const [W, H] = UKURAN_KARTU
-  const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'portrait' })
+  const doc: Doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'portrait' })
   const mx = 3.6
   const tengah = W / 2
 
