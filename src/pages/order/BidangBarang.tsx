@@ -7,6 +7,7 @@ import { formatBulan } from '../../lib/format'
 import { Bidang, Isian, cx } from '../../components/ui/ui'
 import { FotoCincin } from '../../components/FotoCincin'
 import { alamatFoto, modelCocok, useKatalogCincin } from '../../lib/kodeCincin'
+import { KELAS, LABEL_KELAS } from '../stok/produk'
 
 interface Props {
   /** Awalan nama isian, mis. 'items.0.' untuk barang di dalam order, atau '' untuk satu barang. */
@@ -268,44 +269,68 @@ function PilihKodeCincin({ awalan, kategori, gender }: { awalan: string; kategor
 
   if (!katalog.siap) return null
   const cocok = modelCocok(katalog.model, kategori, gender)
-  const daftar = semua || !cocok.length ? katalog.model : cocok
+  const tampilSemua = semua || !cocok.length
   // Kode yang sudah terpilih selalu tampil walau di luar saringan (data lama).
-  const pilihan = terpilih && !daftar.some((m) => m.id === terpilih)
-    ? [...katalog.model.filter((m) => m.id === terpilih), ...daftar]
-    : daftar
+  const pilihan = !tampilSemua && terpilih && !cocok.some((m) => m.id === terpilih)
+    ? [...katalog.model.filter((m) => m.id === terpilih), ...cocok]
+    : cocok
   const model = katalog.model.find((m) => m.id === terpilih)
+  const pilih = (id: string) => setValue(nama, id, { shouldDirty: true })
+  const kartu = (m: (typeof katalog.model)[number]) => (
+    <TombolModel key={m.id} pilih={terpilih === m.id} kode={m.code}
+      src={alamatFoto(m.photo_static, m.photo_path, katalog.foto)} onClick={() => pilih(m.id)} />
+  )
+  // Semua model dikelompokkan per kelas (Premium, High, ...) supaya mudah dicari.
+  const kelompok = KELAS.map((k) => ({ k, isi: katalog.model.filter((m) => m.class === k) })).filter((g) => g.isi.length)
+  const KISI = 'grid grid-cols-4 gap-2 sm:grid-cols-6'
 
   return (
-    <fieldset>
-      <legend className="mb-1.5 flex w-full flex-wrap items-baseline justify-between gap-x-2 text-sm font-semibold text-navy-900">
-        <span>Kode cincin <span className="font-normal text-ink-muted">(opsional)</span></span>
-        {model && <span className="text-xs font-bold tracking-wide text-[#8E6C27]">{model.code} · {model.name}</span>}
+    // min-w-0: fieldset bawaan browser melebar mengikuti isinya; tanpa ini halaman ikut bergeser ke samping.
+    <fieldset className="min-w-0">
+      <legend className="mb-1.5 text-sm font-semibold text-navy-900">
+        Kode cincin <span className="font-normal text-ink-muted">(opsional)</span>
       </legend>
       {katalog.memuat && !katalog.model.length ? (
         <p className="text-sm text-ink-muted">Memuat katalog...</p>
       ) : (
-        <>
-          <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-2 [scrollbar-width:thin]" role="radiogroup" aria-label="Kode cincin">
-            <TombolModel pilih={!terpilih} onClick={() => setValue(nama, '', { shouldDirty: true })} kode="Tanpa kode" src={null} kosong />
-            {pilihan.map((m) => (
-              <TombolModel key={m.id} pilih={terpilih === m.id} kode={m.code}
-                src={alamatFoto(m.photo_static, m.photo_path, katalog.foto)}
-                onClick={() => setValue(nama, m.id, { shouldDirty: true })} />
-            ))}
-          </div>
+        <div className="space-y-2" role="radiogroup" aria-label="Kode cincin">
+          {model && (
+            <p className="truncate rounded-lg bg-gold-50 px-2.5 py-1.5 text-xs text-ink-soft ring-1 ring-gold-200">
+              Terpilih: <strong className="tracking-wide text-[#8E6C27]">{model.code}</strong> · {model.name}
+            </p>
+          )}
+          {tampilSemua ? (
+            <>
+              <div className={KISI}>
+                <TombolModel pilih={!terpilih} onClick={() => pilih('')} kode="Tanpa kode" src={null} kosong />
+              </div>
+              {kelompok.map((g) => (
+                <div key={g.k}>
+                  <p className="mb-1 mt-2 text-[11px] font-bold tracking-[0.15em] text-ink-muted">{LABEL_KELAS[g.k].toUpperCase()}</p>
+                  <div className={KISI}>{g.isi.map(kartu)}</div>
+                </div>
+              ))}
+            </>
+          ) : (
+            <div className={KISI}>
+              <TombolModel pilih={!terpilih} onClick={() => pilih('')} kode="Tanpa kode" src={null} kosong />
+              {pilihan.map(kartu)}
+            </div>
+          )}
           <p className="text-xs text-ink-muted">
             {!kategori || !gender
               ? 'Pilih kategori dan gender dulu supaya kode yang cocok muncul. '
               : !cocok.length
                 ? `Belum ada model ${kategori} ${gender} di Stok barang, jadi semua model ditampilkan. `
-                : `${cocok.length} model ${kategori} ${gender}. `}
-            {cocok.length > 0 && cocok.length < katalog.model.length && (
-              <button type="button" className="font-semibold text-[#8E6C27] underline" onClick={() => setSemua((v) => !v)}>
-                {semua ? 'Tampilkan yang cocok saja' : 'Tampilkan semua model'}
-              </button>
-            )}
+                : tampilSemua ? `Menampilkan semua ${katalog.model.length} model. ` : `${cocok.length} model ${kategori} ${gender}. `}
           </p>
-        </>
+          {cocok.length > 0 && cocok.length < katalog.model.length && (
+            <button type="button" onClick={() => setSemua((v) => !v)}
+              className="inline-flex h-9 items-center rounded-xl border border-gold-300 bg-white px-3 text-xs font-semibold text-[#8E6C27] transition-transform active:scale-95">
+              {semua ? 'Tampilkan yang cocok saja' : `Tampilkan semua model (${katalog.model.length})`}
+            </button>
+          )}
+        </div>
       )}
     </fieldset>
   )
@@ -319,17 +344,17 @@ function TombolModel({ pilih, onClick, kode, src, kosong }: { pilih: boolean; on
       aria-checked={pilih}
       onClick={onClick}
       className={cx(
-        'relative flex w-[76px] shrink-0 snap-start flex-col items-center gap-1 rounded-xl border p-1.5 transition-[transform,box-shadow,border-color] duration-200 active:scale-95',
+        'relative flex w-full min-w-0 flex-col items-center gap-1 rounded-xl border p-1.5 transition-[transform,box-shadow,border-color] duration-200 active:scale-95',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400',
         pilih ? 'border-gold-400 bg-navy-900 shadow-sm' : 'border-ice-300 bg-white hover:border-gold-300',
       )}
     >
       {kosong ? (
-        <span className={cx('grid h-14 w-14 place-items-center rounded-lg border border-dashed text-[10px] font-semibold', pilih ? 'border-gold-300 text-gold-200' : 'border-ice-300 text-ink-muted')}>—</span>
+        <span className={cx('grid aspect-square w-full max-w-[3.5rem] place-items-center rounded-lg border border-dashed text-[10px] font-semibold', pilih ? 'border-gold-300 text-gold-200' : 'border-ice-300 text-ink-muted')}>—</span>
       ) : (
-        <FotoCincin src={src} kode={kode} className="h-14 w-14" />
+        <FotoCincin src={src} kode={kode} className="aspect-square w-full max-w-[3.5rem]" />
       )}
-      <span className={cx('text-[11px] font-bold leading-tight tracking-wide', pilih ? 'text-gold-200' : 'text-navy-800')}>{kode}</span>
+      <span className={cx('w-full truncate text-center text-[10.5px] font-bold leading-tight tracking-wide', pilih ? 'text-gold-200' : 'text-navy-800')}>{kode}</span>
       {pilih && (
         <span className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-gold-400 text-navy-900" aria-hidden>
           <Check className="h-3 w-3" />
