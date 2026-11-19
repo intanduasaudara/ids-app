@@ -887,12 +887,130 @@ function gambarKartu(p: Pena, k: KartuOrderPdf, a: AsetKartu) {
   }
 }
 
-/** FORM ORDERAN BERLIAN satu barang sebagai PDF ukuran kartu KTP tegak. */
-export async function pdfKartuOrder(k: KartuOrderPdf, namaBerkas: string): Promise<void> {
+/** Kartu mendatar (KTP/ATM 85,6 × 54 mm): kiri logo + gambar produk, kanan data + tanda tangan. */
+function gambarKartuMendatar(p: Pena, k: KartuOrderPdf, a: AsetKartu) {
+  const W = 85.6, H = 54
+  p.kotak(0, 0, W, H, 0, { isi: [255, 255, 255] })
+  if (a.tanda) {
+    const tw = 34
+    const th = (tw * a.tanda.h) / a.tanda.w
+    p.gambar(a.tanda, 52 - tw / 2, H / 2 - th / 2, tw, th)
+  }
+  p.kotak(1.2, 1.2, W - 2.4, H - 2.4, 1.6, { garis: EMAS, tebal: 0.3 })
+  p.kotak(1.9, 1.9, W - 3.8, H - 3.8, 1.1, { garis: EMAS_MUDA, tebal: 0.1 })
+
+  // Panel kiri
+  const kiri = 3.4, lebarKiri = 25
+  const tengahKiri = kiri + lebarKiri / 2
+  let y = 3.6
+  if (a.tegak) {
+    const lh = 10
+    const lw = (lh * a.tegak.w) / a.tegak.h
+    p.gambar(a.tegak, tengahKiri - lw / 2, y, lw, lh)
+    y += lh + 1.8
+  }
+  if (a.foto) {
+    const gPita: GayaTeks = { ukuran: 4.6, tebal: true, warna: EMAS_TEKS, tengah: true }
+    const tipe = potong(p, k.tipe, lebarKiri - 2.4, gPita).slice(0, 2)
+    const tp = tipe.length * 1.9 + 1.2
+    p.kotak(kiri, y, lebarKiri, tp, 1.2, { isi: HITAM })
+    tipe.forEach((t, i) => p.teks(t, tengahKiri, y + 2.1 + i * 1.9, gPita))
+    y += tp + 1.2
+    const sisi = Math.max(10, Math.min(lebarKiri - 2, H - 3.6 - y))
+    p.kotak(tengahKiri - sisi / 2, y, sisi, sisi, 1.4, { isi: [255, 255, 255], garis: [230, 215, 179], tebal: 0.2 })
+    const f = a.foto
+    const s = Math.min((sisi - 1.2) / f.w, (sisi - 1.2) / f.h)
+    p.gambar(f, tengahKiri - (f.w * s) / 2, y + (sisi - f.h * s) / 2, f.w * s, f.h * s)
+  }
+  // Garis pemisah emas
+  const xPisah = kiri + lebarKiri + 2
+  p.garis(xPisah, 5, xPisah, H - 5, EMAS_MUDA, 0.15)
+
+  // Panel kanan
+  const mx = xPisah + 2.4, kanan = W - 3.6
+  const tengahKanan = (mx + kanan) / 2
+  y = 6.4
+  teksBerjarak(p, 'FORM ORDERAN BERLIAN', tengahKanan, y, { ukuran: 6, tebal: true, warna: EMAS, tengah: true, jarak: 0.36 })
+  y += 3
+  p.teks(`No. ${k.nomor}`, tengahKanan, y, { ukuran: 7, tebal: true, warna: HITAM, tengah: true })
+  y += 2.2
+  p.garis(mx + 3, y, tengahKanan - 1.6, y, EMAS, 0.2)
+  p.garis(tengahKanan + 1.6, y, kanan - 3, y, EMAS, 0.2)
+  p.poligon([[tengahKanan, y - 0.8], [tengahKanan + 0.8, y], [tengahKanan, y + 0.8], [tengahKanan - 0.8, y]], EMAS)
+  y += 0.6
+  const lebarLabel = 20.5
+  const xTitik = mx + 21
+  const xIsi = xTitik + 1.6
+  const lebarIsi = kanan - xIsi
+  const gLabel: GayaTeks = { ukuran: 5, warna: ABU }
+  const tinggiBaris = 2
+  k.baris.forEach(([label, isi, merah], i) => {
+    const gIsi: GayaTeks = { ukuran: 5.2, tebal: true, warna: merah ? MERAH : HITAM }
+    const bl = potong(p, label, lebarLabel, gLabel)
+    const bi = potong(p, isi || '-', lebarIsi, gIsi)
+    const yTeks = y + 2.3
+    bl.forEach((t, j) => p.teks(t, mx, yTeks + j * tinggiBaris, gLabel))
+    p.teks(':', xTitik, yTeks, gLabel)
+    bi.forEach((t, j) => p.teks(t, xIsi, yTeks + j * tinggiBaris, gIsi))
+    y += Math.max(bl.length, bi.length) * tinggiBaris + 1.1
+    if (i < k.baris.length - 1) p.garis(mx, y, kanan, y, GARIS, 0.12, true)
+  })
+
+  if (k.tampilTtd) {
+    const yGaris = H - 6.6
+    const xt = kanan - 12
+    p.teks('Hormat kami,', xt, yGaris - 5.4, { ukuran: 4.2, warna: ABU, tengah: true })
+    if (a.ttd) {
+      const s = Math.min(18 / a.ttd.w, 4.4 / a.ttd.h)
+      p.gambar(a.ttd, xt - (a.ttd.w * s) / 2, yGaris - 0.2 - a.ttd.h * s, a.ttd.w * s, a.ttd.h * s)
+    }
+    p.garis(xt - 9, yGaris, xt + 9, yGaris, HITAM, 0.18)
+    p.teks(k.jabatan, xt, yGaris + 2.4, { ukuran: 6, tebal: true, serif: true, warna: EMAS, tengah: true })
+    p.teks('CV. Intan Dua Saudara', xt, yGaris + 4.2, { ukuran: 4, warna: ABU, tengah: true })
+  }
+}
+
+/** Pilihan ukuran cetak kartu order. */
+export type UkuranKartu = 'tegak' | 'mendatar' | 'a4'
+export const PILIHAN_UKURAN_KARTU: { nilai: UkuranKartu; label: string; kertas: string }[] = [
+  { nilai: 'tegak', label: 'Kartu KTP/ATM tegak (5,4 × 8,56 cm)', kertas: '54mm 85.6mm' },
+  { nilai: 'mendatar', label: 'Kartu KTP/ATM mendatar (8,56 × 5,4 cm)', kertas: '85.6mm 54mm' },
+  { nilai: 'a4', label: 'Ukuran KTP/ATM di kertas A4 + garis potong', kertas: 'A4' },
+]
+/** Ukuran gambar kartu (mm) untuk tiap pilihan; pilihan A4 memakai kartu tegak. */
+export const ukuranGambarKartu = (u: UkuranKartu): [number, number] => (u === 'mendatar' ? [85.6, 54] : UKURAN_KARTU)
+const gambarSesuai = (u: UkuranKartu) => (u === 'mendatar' ? gambarKartuMendatar : gambarKartu)
+
+/** Geser semua gambar sejauh (dx, dy) mm: dipakai untuk menaruh kartu di tengah kertas A4. */
+function geser(p: Pena, dx: number, dy: number): Pena {
+  return {
+    teks: (t, x, y, g) => p.teks(t, x + dx, y + dy, g),
+    lebar: (t, g) => p.lebar(t, g),
+    garis: (x1, y1, x2, y2, w, tb, putus) => p.garis(x1 + dx, y1 + dy, x2 + dx, y2 + dy, w, tb, putus),
+    kotak: (x, y, w, h, r, o) => p.kotak(x + dx, y + dy, w, h, r, o),
+    gambar: (g, x, y, w, h) => p.gambar(g, x + dx, y + dy, w, h),
+    poligon: (t, w) => p.poligon(t.map(([x, y]) => [x + dx, y + dy] as [number, number]), w),
+  }
+}
+
+/** Tanda potong di keempat sudut kartu (di luar kartu, supaya mudah digunting tepat ukuran). */
+function tandaPotong(p: Pena, x: number, y: number, w: number, h: number) {
+  const j = 1.5, l = 4
+  const abu: RGB = [120, 120, 120]
+  for (const [cx, cy, sx, sy] of [[x, y, -1, -1], [x + w, y, 1, -1], [x, y + h, -1, 1], [x + w, y + h, 1, 1]] as const) {
+    p.garis(cx + sx * j, cy, cx + sx * (j + l), cy, abu, 0.15)
+    p.garis(cx, cy + sy * j, cx, cy + sy * (j + l), abu, 0.15)
+  }
+}
+
+/** FORM ORDERAN BERLIAN satu barang sebagai PDF, ukuran kartu KTP/ATM (tegak/mendatar) atau di kertas A4. */
+export async function pdfKartuOrder(k: KartuOrderPdf, namaBerkas: string, ukuran: UkuranKartu = 'tegak'): Promise<void> {
   const { jsPDF } = await pustaka()
   const a = await siapkanAsetKartu(k)
-  const [W, H] = UKURAN_KARTU
-  const doc: Doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'portrait' })
+  const [W, H] = ukuranGambarKartu(ukuran)
+  const doc: Doc = ukuran === 'a4'
+    ? new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+    : new jsPDF({ unit: 'mm', format: [W, H], orientation: ukuran === 'mendatar' ? 'landscape' : 'portrait' })
   doc.setProperties({ title: `Form Orderan Berlian No. ${k.nomor}`, subject: 'Form Orderan Berlian', author: 'CV. Intan Dua Saudara', creator: 'IDS' })
   const font = (g: GayaTeks) => {
     doc.setFont(g.serif ? 'times' : 'helvetica', g.tebal ? 'bold' : 'normal')
@@ -916,15 +1034,23 @@ export async function pdfKartuOrder(k: KartuOrderPdf, namaBerkas: string): Promi
     gambar: (g, x, y, w, h) => doc.addImage(g.data, 'PNG', x, y, w, h, undefined, 'FAST'),
     poligon: (t, w) => poligon(doc, t, w),
   }
-  gambarKartu(pena, k, a)
+  if (ukuran === 'a4') {
+    // Kartu ukuran asli (54 × 85,6 mm) di tengah atas A4, dengan tanda potong.
+    const x0 = (210 - W) / 2, y0 = 22
+    pena.teks('FORM ORDERAN BERLIAN — ukuran kartu KTP/ATM', 105, 12, { ukuran: 8, tebal: true, warna: EMAS, tengah: true })
+    pena.teks('Cetak dengan skala 100% (ukuran sebenarnya), lalu gunting mengikuti tanda sudut.', 105, 16, { ukuran: 7, warna: ABU, tengah: true })
+    gambarKartu(geser(pena, x0, y0), k, a)
+    tandaPotong(pena, x0, y0, W, H)
+  } else {
+    gambarSesuai(ukuran)(pena, k, a)
+  }
   await simpanPdf(doc.output('blob'), namaBerkas)
 }
 
-/** Kartu yang sama sebagai gambar JPG tajam (untuk dikirim lewat WhatsApp: langsung tampil isinya). */
-export async function gambarKartuOrder(k: KartuOrderPdf, namaBerkas: string): Promise<void> {
+/** Menggambar kartu ke kanvas (px piksel per mm). Dipakai untuk pratinjau di layar dan gambar JPG. */
+export async function kanvasKartu(k: KartuOrderPdf, ukuran: UkuranKartu, px: number): Promise<HTMLCanvasElement> {
   const a = await siapkanAsetKartu(k)
-  const [W, H] = UKURAN_KARTU
-  const px = 24 // piksel per mm (≈ 610 dpi): 1296 × 2054 px
+  const [W, H] = ukuranGambarKartu(ukuran)
   const c = document.createElement('canvas')
   c.width = Math.round(W * px)
   c.height = Math.round(H * px)
@@ -958,7 +1084,13 @@ export async function gambarKartuOrder(k: KartuOrderPdf, namaBerkas: string): Pr
       x.fillStyle = rgb(w); x.fill()
     },
   }
-  gambarKartu(pena, k, a)
+  gambarSesuai(ukuran)(pena, k, a)
+  return c
+}
+
+/** Kartu sebagai gambar JPG tajam (untuk WhatsApp: langsung tampil isinya). Pilihan A4 mengirim kartu tegak. */
+export async function gambarKartuOrder(k: KartuOrderPdf, namaBerkas: string, ukuran: UkuranKartu = 'tegak'): Promise<void> {
+  const c = await kanvasKartu(k, ukuran === 'a4' ? 'tegak' : ukuran, 24)
   const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, 'image/jpeg', 0.92))
   if (!blob) throw new Error('Gambar tidak bisa dibuat di perangkat ini.')
   const berkas = new File([blob], namaBerkas, { type: 'image/jpeg' })

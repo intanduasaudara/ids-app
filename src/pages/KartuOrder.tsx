@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Download, Image as IkonGambar, Printer } from 'lucide-react'
-import { gambarKartuOrder, pdfKartuOrder, type KartuOrderPdf } from '../lib/pdfNota'
+import { PILIHAN_UKURAN_KARTU, gambarKartuOrder, kanvasKartu, pdfKartuOrder, ukuranGambarKartu, type KartuOrderPdf, type UkuranKartu } from '../lib/pdfNota'
 import { pesanGalat } from '../lib/errors'
 import { db } from '../lib/supabase'
 import type { Barang } from '../lib/types'
@@ -12,14 +12,22 @@ import { muatFormOrder, namaTipe, targetSelesai } from '../lib/formOrder'
 import { useMuat } from '../sync/useMuat'
 import { useVersiData } from '../sync/SyncProvider'
 import { useNotifikasi } from '../components/ui/Notifikasi'
-import { TandaIDS } from '../components/layout/Logo'
 import { useIdentitasNota } from '../components/nota/useIdentitasNota'
-import { KotakGalat, Pemuat, cx } from '../components/ui/ui'
-import { FotoCincin } from '../components/FotoCincin'
+import { KotakGalat, Pemuat } from '../components/ui/ui'
 
-// KARTU FORM ORDERAN BERLIAN untuk satu barang, ukuran kartu KTP tegak (54 × 85,6 mm).
+// KARTU FORM ORDERAN BERLIAN untuk satu barang, ukuran kartu KTP/ATM (85,6 × 54 mm).
 //   /cetak-kartu/<id barang>
-// Simpan PDF membuat berkas langsung; Cetak memakai printer (atur kertas ke ukuran kartu).
+// Pilihan ukuran: tegak, mendatar, atau ukuran asli di kertas A4 dengan tanda potong.
+// Pratinjau di layar = gambar yang sama dengan PDF dan JPG, jadi hasil cetak persis seperti yang terlihat.
+
+const KUNCI_UKURAN = 'ids-ukuran-kartu'
+function ukuranTersimpan(): UkuranKartu {
+  try {
+    const u = localStorage.getItem(KUNCI_UKURAN)
+    if (u === 'tegak' || u === 'mendatar' || u === 'a4') return u
+  } catch { /* penyimpanan tidak tersedia */ }
+  return 'tegak'
+}
 
 export default function KartuOrder() {
   const { id = '' } = useParams()
@@ -28,6 +36,11 @@ export default function KartuOrder() {
   const { beri } = useNotifikasi()
   const identitas = useIdentitasNota()
   const [membuat, setMembuat] = useState<'pdf' | 'gambar' | null>(null)
+  const [ukuran, setUkuran] = useState<UkuranKartu>(ukuranTersimpan)
+  const pilihUkuran = (u: UkuranKartu) => {
+    setUkuran(u)
+    try { localStorage.setItem(KUNCI_UKURAN, u) } catch { /* abaikan */ }
+  }
 
   const data = useMuat(async () => {
     const { data: b, error } = await db().from('v_items').select('*').eq('id', id).maybeSingle()
@@ -41,13 +54,14 @@ export default function KartuOrder() {
   const b = data.data?.barang
   const foto = useFotoUnggahan([b?.product_photo_path])
 
-  // Ukuran kertas untuk dialog cetak browser: kartu KTP tegak.
+  // Ukuran kertas untuk dialog cetak browser mengikuti pilihan.
   useEffect(() => {
     const gaya = document.createElement('style')
-    gaya.textContent = '@page { size: 54mm 85.6mm; margin: 0; }'
+    const kertas = PILIHAN_UKURAN_KARTU.find((x) => x.nilai === ukuran)?.kertas ?? 'A4'
+    gaya.textContent = `@page { size: ${kertas}; margin: 0; }`
     document.head.appendChild(gaya)
     return () => gaya.remove()
-  }, [])
+  }, [ukuran])
 
   if (data.memuat && !data.data) return <Pemuat />
   if (data.galat && !data.data) return <div className="p-6"><KotakGalat pesan={data.galat} ulangi={data.muatUlang} /></div>
@@ -72,8 +86,8 @@ export default function KartuOrder() {
   const buat = async (jenis: 'pdf' | 'gambar') => {
     setMembuat(jenis)
     try {
-      if (jenis === 'pdf') await pdfKartuOrder(isiKartu, `${nama}.pdf`)
-      else await gambarKartuOrder(isiKartu, `${nama}.jpg`)
+      if (jenis === 'pdf') await pdfKartuOrder(isiKartu, `${nama}${ukuran === 'tegak' ? '' : `-${ukuran}`}.pdf`, ukuran)
+      else await gambarKartuOrder(isiKartu, `${nama}.jpg`, ukuran)
     } catch (e) {
       beri(pesanGalat(e), 'galat')
     } finally {
@@ -98,76 +112,68 @@ export default function KartuOrder() {
             <Printer className="h-4 w-4" /> Cetak
           </button>
         </div>
+        <label className="flex w-full flex-col gap-1 text-sm font-semibold text-navy-900">
+          Ukuran cetak
+          <select value={ukuran} onChange={(e) => pilihUkuran(e.target.value as UkuranKartu)}
+            className="h-11 w-full rounded-xl border border-ice-300 bg-white px-3 text-sm font-normal">
+            {PILIHAN_UKURAN_KARTU.map((x) => <option key={x.nilai} value={x.nilai}>{x.label}</option>)}
+          </select>
+        </label>
         <p className="w-full text-xs text-ink-muted">
-          Ukuran kartu KTP tegak (5,4 × 8,5 cm). Saat Cetak, pilih ukuran kertas kartu / 54 × 86 mm di pengaturan printer.
-          Untuk WhatsApp pakai <b>Kirim gambar</b>: kartunya langsung terlihat di chat. Ring size yang belum diisi tidak ditampilkan.
+          {ukuran === 'a4'
+            ? 'Untuk printer biasa: kartu dicetak ukuran asli KTP/ATM di kertas A4. Saat mencetak, pilih skala 100% / "Ukuran sebenarnya", lalu gunting mengikuti tanda sudut.'
+            : 'Untuk printer kartu atau kertas ukuran kartu: pilih ukuran kertas 54 × 86 mm (CR80 / ID card) di pengaturan printer.'}
+          {' '}Untuk WhatsApp pakai <b>Kirim gambar</b>.
         </p>
       </div>
 
-      <div className="flex justify-center px-3 py-6 print:p-0">
-        {/* Di layar diperbesar supaya mudah dibaca; saat dicetak ukuran asli. */}
-        <div className="[zoom:1.6] sm:[zoom:2] print:[zoom:1]">
-          <KertasKartu nomor={b.order_number} baris={baris} tipe={b.product_code ? `${tipe} · ${b.product_code}` : tipe} kode={b.product_code ?? null} foto={urlFoto}
-            ttd={identitas.tampilTtd ? identitas.ttd : null} tampilTtd={identitas.tampilTtd} jabatan={identitas.jabatan} />
-        </div>
-      </div>
+      <Pratinjau isi={isiKartu} ukuran={ukuran} />
     </div>
   )
 }
 
-function KertasKartu({ nomor, baris, tipe, kode, foto, ttd, tampilTtd, jabatan }: {
-  nomor: string
-  baris: [string, string, boolean?][]
-  tipe: string
-  kode: string | null
-  foto: string | null
-  ttd: string | null
-  tampilTtd: boolean
-  jabatan: string
-}) {
-  return (
-    <div className="relative flex h-[85.6mm] w-[54mm] flex-col overflow-hidden bg-white px-[3.6mm] pb-[3mm] pt-[3.2mm] text-[5.4pt] leading-snug text-[#1f1a12] shadow-card print:shadow-none">
-      {/* Bingkai emas ganda */}
-      <div aria-hidden className="pointer-events-none absolute inset-[1.2mm] rounded-[1.6mm] border-[0.3mm] border-[#8E6C27]" />
-      <div aria-hidden className="pointer-events-none absolute inset-[1.9mm] rounded-[1.1mm] border-[0.1mm] border-[#d4b26f]" />
-      {/* Logo samar di latar */}
-      <div aria-hidden className="pointer-events-none absolute left-1/2 top-[46%] w-[40mm] -translate-x-1/2 -translate-y-1/2 opacity-[0.06]">
-        <TandaIDS className="!h-auto !w-full" />
-      </div>
+/** Pratinjau = gambar yang sama persis dengan PDF/JPG, ditampilkan dan dicetak dalam ukuran milimeter sebenarnya. */
+function Pratinjau({ isi, ukuran }: { isi: KartuOrderPdf; ukuran: UkuranKartu }) {
+  const [src, setSrc] = useState<string | null>(null)
+  const kunci = JSON.stringify(isi)
+  const gambarUkuran: UkuranKartu = ukuran === 'a4' ? 'tegak' : ukuran
+  useEffect(() => {
+    let batal = false
+    setSrc(null)
+    kanvasKartu(isi, gambarUkuran, 16)
+      .then((c) => { if (!batal) setSrc(c.toDataURL('image/png')) })
+      .catch(() => { if (!batal) setSrc(null) })
+    return () => { batal = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kunci, gambarUkuran])
+  const [w, h] = ukuranGambarKartu(gambarUkuran)
+  const kartu = src
+    ? <img src={src} alt="Form Orderan Berlian" style={{ width: `${w}mm`, height: `${h}mm` }} className="block max-w-none shadow-card print:shadow-none" />
+    : <div style={{ width: `${w}mm`, height: `${h}mm` }} className="grid place-items-center bg-white text-[6pt] text-ink-muted">Menyiapkan kartu…</div>
 
-      <div className="relative flex flex-1 flex-col">
-        <img src={`${import.meta.env.BASE_URL}logo-ids-tegak.png`} alt="CV. Intan Dua Saudara" draggable={false} className="mx-auto h-[11mm] w-auto object-contain" />
-        <p className="mt-[1.4mm] text-center text-[6.2pt] font-bold tracking-[0.16em] text-[#8E6C27]">FORM ORDERAN BERLIAN</p>
-        <p className="text-center text-[7pt] font-bold tracking-wide">No. {nomor}</p>
-        <div className="my-[1.2mm] flex items-center gap-[1mm]" aria-hidden>
-          <span className="h-[0.2mm] flex-1 bg-gradient-to-r from-transparent to-[#8E6C27]" />
-          <span className="h-[1.3mm] w-[1.3mm] rotate-45 bg-[#8E6C27]" />
-          <span className="h-[0.2mm] flex-1 bg-gradient-to-l from-transparent to-[#8E6C27]" />
+  if (ukuran === 'a4') {
+    // Kertas A4 dengan kartu ukuran asli + tanda potong di sudut.
+    const sudut = 'absolute h-[4mm] w-[4mm] border-[#787878]'
+    return (
+      <div className="flex justify-center px-3 py-6 print:p-0">
+        <div className="relative h-[297mm] w-[210mm] shrink-0 bg-white pt-[10mm] text-center shadow-card [zoom:0.42] sm:[zoom:0.7] print:shadow-none print:[zoom:1]">
+          <p className="text-[8pt] font-bold text-[#8E6C27]">FORM ORDERAN BERLIAN — ukuran kartu KTP/ATM</p>
+          <p className="text-[7pt] text-[#5a4c33]">Cetak dengan skala 100% (ukuran sebenarnya), lalu gunting mengikuti tanda sudut.</p>
+          <div className="relative mx-auto mt-[4mm]" style={{ width: `${w}mm`, height: `${h}mm` }}>
+            {kartu}
+            <span className={`${sudut} -left-[5.5mm] -top-[5.5mm] border-b border-r`} />
+            <span className={`${sudut} -right-[5.5mm] -top-[5.5mm] border-b border-l`} />
+            <span className={`${sudut} -bottom-[5.5mm] -left-[5.5mm] border-r border-t`} />
+            <span className={`${sudut} -bottom-[5.5mm] -right-[5.5mm] border-l border-t`} />
+          </div>
         </div>
-        <dl>
-          {baris.map(([l, v, merah]) => (
-            <div key={l} className="grid grid-cols-[16.4mm_1.7mm_1fr] border-b border-dotted border-[#dccdab] py-[0.6mm] last:border-0">
-              <dt className="text-[#5a4c33]">{l}</dt><span className="text-[#5a4c33]">:</span>
-              <dd className={cx('min-w-0 break-words font-bold', merah && 'text-[#c62828]')}>{v}</dd>
-            </div>
-          ))}
-        </dl>
-        {kode && (
-          <div className="mt-[1.8mm] flex flex-col items-center">
-            <span className="max-w-full truncate rounded-full bg-[#1f1a12] px-[2.6mm] py-[0.5mm] text-[5.4pt] font-bold tracking-wide text-[#e6c98a]">{tipe}</span>
-            <FotoCincin src={foto} kode={kode} className="mt-[1.2mm] h-[14mm] w-[14mm] rounded-[1.6mm] border-[#e6d7b3] bg-white" />
-          </div>
-        )}
-        {tampilTtd && (
-          <div className="mt-auto flex flex-col items-center text-center">
-            <p className="text-[4.6pt] text-[#5a4c33]">Hormat kami,</p>
-            <div className="flex h-[6.5mm] items-end justify-center">{ttd && <img src={ttd} alt="Tanda tangan" className="max-h-full max-w-[22mm] object-contain" />}</div>
-            <div className="w-[22mm] border-b-[0.2mm] border-[#1f1a12]" />
-            <p className="mt-[0.4mm] font-display text-[6.4pt] font-bold text-[#8E6C27]">{jabatan}</p>
-            <p className="text-[4.4pt] tracking-wide text-[#5a4c33]">CV. Intan Dua Saudara</p>
-          </div>
-        )}
       </div>
+    )
+  }
+  return (
+    <div className="flex justify-center px-3 py-6 print:p-0">
+      {/* Di layar diperbesar supaya mudah dibaca; saat dicetak ukuran asli. */}
+      <div className={ukuran === 'mendatar' ? '[zoom:1.05] sm:[zoom:1.6] print:[zoom:1]' : '[zoom:1.6] sm:[zoom:2] print:[zoom:1]'}>{kartu}</div>
     </div>
   )
 }
